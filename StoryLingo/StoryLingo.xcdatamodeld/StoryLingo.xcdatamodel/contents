@@ -2,16 +2,27 @@
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24299" systemVersion="25C56" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
     <entity name="AppSettings" representedClassName="AppSettings" syncable="YES" codeGenerationType="class">
         <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="hasCompletedOnboarding" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="level" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
-        <relationship name="selectedLangauge" maxCount="1" deletionRule="Nullify" destinationEntity="Langauge" inverseName="selectedBySetting" inverseEntity="Langauge"/>
+        <relationship name="selectedLanguage" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Language" inverseName="selectedBySetting" inverseEntity="Language"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
     </entity>
-    <entity name="Langauge" representedClassName="Langauge" syncable="YES" codeGenerationType="class">
+    <entity name="Language" representedClassName="Language" syncable="YES" codeGenerationType="class">
         <attribute name="code" attributeType="String"/>
         <attribute name="displayName" attributeType="String"/>
         <attribute name="flagEmoji" optional="YES" attributeType="String"/>
-        <relationship name="selectedBySetting" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="AppSettings" inverseName="selectedLangauge" inverseEntity="AppSettings"/>
+        <relationship name="selectedBySetting" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="AppSettings" inverseName="selectedLanguage" inverseEntity="AppSettings"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="code"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
     </entity>
     <entity name="Message" representedClassName="Message" syncable="YES" codeGenerationType="class">
         <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>

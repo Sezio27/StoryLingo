@@ -7,46 +7,44 @@
 
 import SwiftUI
 
-struct FeatureRow: View {
+struct StatCardNumber: View {
     let icon: String
-    let iconBackground: Color
     let title: String
-    let subtitle: String
+    let amount: String
 
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(iconBackground)
-                    .frame(width: 42, height: 42)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10){
+                Text(title)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
 
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.blue)
             }
+            
+            Text(amount)
+                .font(.system(size: 20, weight: .semibold))
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-
-                Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
         }
-        .padding(.vertical, 6)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.06), radius: 10, y: 6)
+       
+              
+        )
+        
     }
 }
 
 #Preview {
-    FeatureRow(
+    StatCardNumber(
         icon: "sparkles",
-        iconBackground: Color.blue.opacity(0.12),
-        title: "AI-Powered Learning",
-        subtitle: "Interactive conversations tailored to your level"
+        title: "Unique Words",
+        amount: "127"
     )
     .padding()
 }

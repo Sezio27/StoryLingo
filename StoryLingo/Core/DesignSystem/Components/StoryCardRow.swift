@@ -16,18 +16,18 @@ struct StoryCardRow: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(title)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
 
                 HStack(spacing: 18) {
                     Label(relativeTime, systemImage: "clock")
                         .labelStyle(.titleAndIcon)
-                        .font(.system(size: 16, weight: .regular))
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(.secondary)
 
                     Label("\(messageCount)", systemImage: "bubble.left")
                         .labelStyle(.titleAndIcon)
-                        .font(.system(size: 16, weight: .regular))
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -35,7 +35,7 @@ struct StoryCardRow: View {
             Spacer()
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 18)

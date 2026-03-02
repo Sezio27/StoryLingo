@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-private struct StatsListRow: View {
+struct StatsListRow: View {
     let item: StatsListCard.Item
 
     var body: some View {
@@ -17,18 +17,18 @@ private struct StatsListRow: View {
                     .fill(item.iconBackground)
 
                 Image(systemName: item.icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(item.iconTint)
             }
-            .frame(width: 46, height: 46)
+            .frame(width: 42, height: 42)
 
             Text(item.title)
-                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
 
             Spacer()
 
             Text(item.value)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
         }
     }
 }

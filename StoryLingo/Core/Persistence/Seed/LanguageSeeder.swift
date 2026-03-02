@@ -8,33 +8,54 @@
 import CoreData
 
 enum LanguageSeeder {
-    static func seedIfNeeded(context: NSManagedObjectContext) {
-        let req = NSFetchRequest<NSManagedObject>(entityName: "Language") // <- change if your entity is named "Langauge"
+
+    /// Seeds or updates the Language table (safe with unique constraint on `code`).
+    static func seedOrUpdate(context: NSManagedObjectContext) {
+        // Keep it fast and safe
+        context.performAndWait {
+            let seed: [(code: String, name: String, emoji: String)] = [
+                ("da", "Danish", "🇩🇰"),
+                ("de", "German", "🇩🇪"),
+                ("es", "Spanish", "🇪🇸"),
+                ("fr", "French", "🇫🇷"),
+                ("it", "Italian", "🇮🇹"),
+                ("ja", "Japanese", "🇯🇵"),
+                ("ko", "Korean", "🇰🇷"),
+                ("ro", "Romanian", "🇷🇴"),
+                ("th", "Thai", "🇹🇭")
+            ]
+
+            for item in seed {
+                upsertLanguage(code: item.code, name: item.name, emoji: item.emoji, context: context)
+            }
+
+            if context.hasChanges {
+                do {
+                    try context.save()
+                } catch {
+                    // If you still hit a conflict somehow, log it and continue in dev
+                    let nsError = error as NSError
+                    assertionFailure("LanguageSeeder failed to save: \(nsError), \(nsError.userInfo)")
+                }
+            }
+        }
+    }
+
+    // MARK: - Private
+
+    private static func upsertLanguage(code: String, name: String, emoji: String, context: NSManagedObjectContext) {
+        // Fetch by unique key (code)
+        let req: NSFetchRequest<Language> = Language.fetchRequest()
+        req.predicate = NSPredicate(format: "code == %@", code)
         req.fetchLimit = 1
 
-        let hasAny = (try? context.count(for: req)) ?? 0 > 0
-        guard !hasAny else { return }
+        let existing = (try? context.fetch(req))?.first
 
-        let seed: [(code: String, name: String, emoji: String)] = [
-            ("da", "Danish", "🇩🇰"),
-            ("de", "German", "🇩🇪"),
-            ("es", "Spanish", "🇪🇸"),
-            ("fr", "French", "🇫🇷"),
-            ("it", "Italian", "🇮🇹"),
-            ("ja", "Japanese", "🇯🇵"),
-            ("ko", "Korean", "🇰🇷"),
-            ("ro", "Romanian", "🇷🇴"),
-            ("th", "Thai", "🇹🇭")
-        ]
+        let lang = existing ?? Language(context: context)
 
-
-        for item in seed {
-            let lang = Language(context: context) // <- change type if Xcode generated "Langauge"
-            lang.code = item.code
-            lang.displayName = item.name
-            lang.flagEmoji = item.emoji
-        }
-
-        try? context.save()
+        // Ensure required fields are set
+        lang.code = code
+        lang.displayName = name
+        lang.flagEmoji = emoji
     }
 }

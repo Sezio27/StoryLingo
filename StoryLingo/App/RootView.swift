@@ -1,26 +1,37 @@
-//
-//  RootView.swift
-//  StoryLingo
-//
-//  Created by Jakob Jacobsen on 12/02/2026.
-//
-
 import SwiftUI
 import CoreData
 
 struct RootView: View {
-    @FetchRequest(
-        sortDescriptors: [],
-        animation: .default
-    ) private var settings: FetchedResults<AppSettings>
+    @Environment(\.managedObjectContext) private var ctx
+
+    @FetchRequest(sortDescriptors: [], animation: .default)
+    private var settingsResults: FetchedResults<AppSettings>
 
     var body: some View {
         Group {
-            if let settings = settings.first {
-                MainTabView(settings: settings)
+            if let s = settingsResults.first {
+                RootSwitch(settings: s)
             } else {
                 OnboardingView()
             }
+        }
+        .task {
+            await ctx.perform {
+                PersistenceBootstrap.run(in: ctx)
+                ctx.saveIfNeeded()
+            }
+        }
+    }
+}
+
+private struct RootSwitch: View {
+    @ObservedObject var settings: AppSettings
+
+    var body: some View {
+        if settings.hasCompletedOnboarding {
+            MainTabView(settings: settings)
+        } else {
+            OnboardingView()
         }
     }
 }
