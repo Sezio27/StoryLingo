@@ -1,28 +1,43 @@
-//
-//  FeatureRow.swift
-//  StoryLingo
-//
-//  Created by Jakob Jacobsen on 12/02/2026.
-//
-
 import SwiftUI
 
 struct PageHeader: View {
     let title: String
     let subtitle: LocalizedStringKey
-    
+    var showsBackButton: Bool = false
+
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
-        
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 38, weight: .bold, design: .rounded))
-            
-            Text(subtitle)
-                .font(.system(size: 18))
-                .foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: showsBackButton ? 14 : 0) {
+
+            if showsBackButton {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 42, height: 42)
+                        .background(Circle().fill(Color(.systemBackground)))
+                        .overlay(Circle().stroke(Color.black.opacity(0.06), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.08), radius: 14, y: 10)
+                }
+                .buttonStyle(.plain)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 28, weight: .bold))
+                Text(subtitle)
+                    .font(.system(size: 18))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 10)
+            .padding(.horizontal, 10)
+
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 22)
-        .padding(.top, 18)
-        
+        .padding(.horizontal, 20)
+        .padding(.top, 6)
     }
 }

@@ -1,52 +1,51 @@
-//
-//  MainTabView.swift
-//  StoryLingo
-//
-//  Created by Jakob Jacobsen on 12/02/2026.
-//
-
 import SwiftUI
 
 struct PageScaffold<Content: View>: View {
     let title: String
     let subtitle: LocalizedStringKey
     let contentHorizontalPadding: CGFloat
+    let scrolls: Bool
+    let showsBackButton: Bool
     @ViewBuilder var content: Content
 
     init(
         title: String,
         subtitle: LocalizedStringKey,
         contentHorizontalPadding: CGFloat = 20,
+        scrolls: Bool = false,
+        showsBackButton: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.subtitle = subtitle
         self.contentHorizontalPadding = contentHorizontalPadding
+        self.scrolls = scrolls
+        self.showsBackButton = showsBackButton
         self.content = content()
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+        ZStack {
+            Color(.systemGroupedBackground).ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        PageHeader(title: title, subtitle: subtitle)
-                            .padding(.horizontal, 4)
-                            .padding(.top, 4)
+            VStack(alignment: .leading, spacing: 16) {
+                PageHeader(title: title, subtitle: subtitle, showsBackButton: showsBackButton)
 
-                        content
-                            .padding(.horizontal, contentHorizontalPadding)
-                           
-
-                        Spacer(minLength: 24)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if scrolls {
+                    ScrollView { contentBody.padding(.bottom, 24) }
+                } else {
+                    contentBody.frame(maxHeight: .infinity, alignment: .top)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(showsBackButton)   // ✅ hide system back button
+    }
+
+    private var contentBody: some View {
+        content
+            .padding(.horizontal, contentHorizontalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-

@@ -13,6 +13,7 @@ struct StatsView: View {
         PageScaffold(
                     title: "Statistics",
                     subtitle: "Track your learning progress",
+                    scrolls: true
         ) {
                 
                 VStack(spacing: 16) {
