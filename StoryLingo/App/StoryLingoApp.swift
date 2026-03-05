@@ -10,12 +10,14 @@ import CoreData
 
 @main
 struct StoryLingoApp: App {
+    private let appContainer = AppContainer()
     let persistenceController = PersistenceController.shared
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                .environment(\.llmClient, appContainer.llmClient)
         }
     }
 }

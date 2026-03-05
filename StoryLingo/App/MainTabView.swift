@@ -7,21 +7,31 @@
 import SwiftUI
 
 struct MainTabView: View {
+    @Environment(\.managedObjectContext) private var ctx
+    
     let settings: AppSettings
 
     var body: some View {
         TabView {
-            HomeView(settings: settings)
-                .tabItem { Label("Home", systemImage: "house") }
+            NavigationStack {
+                HomeView(settings: settings)
+            }
+            .tabItem { Label("Home", systemImage: "house") }
 
-            StoriesListView()
-                .tabItem { Label("Stories", systemImage: "book") }
+            NavigationStack {
+                StoriesListView(settings: settings, ctx: ctx)
+            }
+            .tabItem { Label("Stories", systemImage: "book") }
 
-            StatsView()
-                .tabItem { Label("Stats", systemImage: "chart.bar") }
+            NavigationStack {
+                StatsView()
+            }
+            .tabItem { Label("Stats", systemImage: "chart.bar") }
 
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem { Label("Settings", systemImage: "gear") }
         }
     }
 }

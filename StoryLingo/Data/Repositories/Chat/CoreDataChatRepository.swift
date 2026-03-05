@@ -14,7 +14,7 @@ final class CoreDataChatRepository: ChatRepository {
         self.ctx = ctx
     }
 
-    func createStory(title: String?, language: Language?) throws -> Story {
+    func createStory(title: String?, genre: String?, theme: String?, language: Language?) throws -> Story {
         guard let language else {
             throw NSError(domain: "Chat", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing language"])
         }
@@ -22,6 +22,9 @@ final class CoreDataChatRepository: ChatRepository {
         let story = Story(context: ctx)
         story.id = UUID()
         story.title = (title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false) ? title : "New Story"
+        story.genre = genre?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        story.theme = theme?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+
         story.createdAt = Date()
         story.updatedAt = Date()
 

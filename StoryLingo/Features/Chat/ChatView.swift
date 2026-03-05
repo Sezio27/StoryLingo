@@ -36,7 +36,15 @@ struct ChatView: View {
                     composer
                 }
             }
-        }.toolbar(.hidden, for: .tabBar) 
+        }.toolbar(.hidden, for: .tabBar)
+            .alert("OpenAI error", isPresented: Binding(
+                get: { vm.errorMessage != nil },
+                set: { if !$0 { vm.errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(vm.errorMessage ?? "")
+            }
     }
 
     private var composer: some View {
@@ -54,18 +62,19 @@ struct ChatView: View {
                         )
                 )
                 .focused($isFocused)
-
+            let isEmpty = vm.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let isDisabled = isEmpty || vm.isSending
             Button {
-                vm.send()
+                Task { await vm.send() }
             } label: {
-                Image(systemName: "arrow.up")
+                Image(systemName: vm.isSending ? "ellipsis" : "arrow.up")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(Color.accentColor))
             }
             .buttonStyle(.plain)
-            .disabled(vm.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(isDisabled)
             .opacity(vm.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1)
         }
         .padding(.horizontal, 22)

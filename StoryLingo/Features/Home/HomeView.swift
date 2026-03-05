@@ -4,25 +4,38 @@ import CoreData
 struct HomeView: View {
     @ObservedObject var settings: AppSettings
     @Environment(\.managedObjectContext) private var ctx
-    @State private var activeStory: Story?
+    @Environment(\.llmClient) private var llmClient
+    @State private var goToCreateStory = false
     @State private var goToChat = false
+        @State private var activeStory: Story?
 
     var body: some View {
-        NavigationStack {
+    
             ScrollView {
                 VStack(spacing: 22) {
                     
-                    NavigationLink(isActive: $goToChat) {
-                        if let story = activeStory {
-                            ChatView(
-                                vm: ChatViewModel(
-                                    story: story,
-                                    repo: CoreDataChatRepository(ctx: ctx)
-                                )
-                            )
-                        }
-                    } label: { EmptyView() }
-                    .hidden()
+               
+                                       NavigationLink(isActive: $goToCreateStory) {
+                                           CreateStoryView(settings: settings) { story in
+                                               activeStory = story
+                                               goToChat = true
+                                           }
+                                       } label: { EmptyView() }
+                                       .hidden()
+                    
+                    // Push Chat (after CreateStory dismissed)
+                                       NavigationLink(isActive: $goToChat) {
+                                           if let story = activeStory {
+                                               ChatView(
+                                                   vm: ChatViewModel(
+                                                       story: story,
+                                                       repo: CoreDataChatRepository(ctx: ctx),
+                                                       llm: llmClient
+                                                   )
+                                               )
+                                           }
+                                       } label: { EmptyView() }
+                                       .hidden()
 
                     // Quick dev button
                     Button {
@@ -64,14 +77,7 @@ struct HomeView: View {
                     .padding(.top, 20)
 
                     NewStoryButton(title: "Create New Story", systemImage: "wand.and.stars") {
-                        do {
-                            let repo = CoreDataChatRepository(ctx: ctx)
-                            let story = try repo.createStory(title: "New Story", language: settings.selectedLanguage)
-                            activeStory = story
-                            goToChat = true
-                        } catch {
-                            assertionFailure("Failed to create story: \(error)")
-                        }
+                        goToCreateStory = true
                     }
                     .padding(.horizontal, 30)
                     .padding(.top, 14)
@@ -108,4 +114,4 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
     }
-}
+
