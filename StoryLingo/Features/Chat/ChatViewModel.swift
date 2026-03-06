@@ -17,9 +17,12 @@ final class ChatViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     @Published private(set) var translatedBubbles: [NSManagedObjectID: BubbleTranslation] = [:]
+    @Published var isRecording = false
+    @Published var speechTranscript = ""
 
     let story: Story
-
+    
+    private let speechService: SpeechRecognizerServiceProtocol
     private let context: NSManagedObjectContext
     private let repo: ChatRepository
     private let llm: LLMClient
@@ -34,7 +37,8 @@ final class ChatViewModel: ObservableObject {
         llm: LLMClient,
         settingsRepository: AppSettingsRepositoryProtocol = AppSettingsRepository(),
         translator: TranslatorClient? = nil,
-        replyGenerator: ChatReplyGenerating? = nil
+        replyGenerator: ChatReplyGenerating? = nil,
+        speechService: SpeechRecognizerServiceProtocol? = nil
     ) {
         self.story = story
         self.context = context
@@ -43,6 +47,7 @@ final class ChatViewModel: ObservableObject {
         self.settingsRepository = settingsRepository
         self.translator = translator ?? LLMTranslatorClient(llm: llm)
         self.replyGenerator = replyGenerator ?? LLMChatReplyGenerator(llm: llm)
+        self.speechService = speechService ?? SpeechRecognizerService()
     }
 
     func load() {
@@ -73,12 +78,69 @@ final class ChatViewModel: ObservableObject {
     func translatedBubble(for message: Message) -> BubbleTranslation? {
         translatedBubbles[message.objectID]
     }
+    
+    func toggleRecording() async {
+        if isRecording {
+            stopRecording()
+            return
+        }
+
+        errorMessage = nil
+
+        let granted = await speechService.requestPermissions()
+        guard granted else {
+            errorMessage = "Microphone or speech recognition permission was denied."
+            return
+        }
+
+        let localeIdentifier = speechLocaleIdentifier(for: story.language?.code ?? "en")
+
+        do {
+            speechTranscript = ""
+            try speechService.startRecording(
+                localeIdentifier: localeIdentifier,
+                onText: { [weak self] text in
+                    guard let self else { return }
+                    self.speechTranscript = text
+                },
+                onFinish: { [weak self] in
+                    guard let self else { return }
+
+                    let finalText = self.speechTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+                    self.isRecording = false
+
+                    guard !finalText.isEmpty else { return }
+
+                    Task {
+                        await self.sendMessage(finalText)
+                        self.speechTranscript = ""
+                    }
+                }
+            )
+            isRecording = true
+        } catch {
+            errorMessage = (error as NSError).localizedDescription
+            isRecording = false
+        }
+    }
+
+    func stopRecording() {
+        speechService.stopRecording()
+        isRecording = false
+    }
 
     func send() async {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
         composerText = ""
+        await sendMessage(text)
+    }
+
+    private func sendMessage(_ rawText: String) async {
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
         errorMessage = nil
         isSending = true
         defer { isSending = false }
@@ -103,10 +165,8 @@ final class ChatViewModel: ObservableObject {
 
             let difficulty = DifficultyLevel(rawValue: settings.level) ?? .intermediate
 
-            // 1) Save user message
             let savedUserMessage = try repo.addMessage(text: text, isUser: true, to: story)
 
-            // 2) Translate user message and persist its translation bubble
             if let userTranslation = try await translateUserMessage(
                 savedUserMessage,
                 nativeLanguage: nativeLanguage,
@@ -119,7 +179,6 @@ final class ChatViewModel: ObservableObject {
                 try persistTranslation(userTranslation, for: savedUserMessage)
             }
 
-            // 3) Refresh history
             let history = try repo.fetchMessages(for: story)
             messages = history
 
@@ -131,7 +190,6 @@ final class ChatViewModel: ObservableObject {
                 )
             }
 
-            // 4) Generate assistant reply + native-language translation in one call
             let replyResult = try await replyGenerator.generateReply(
                 history: llmHistory,
                 context: ChatPromptContext(
@@ -143,14 +201,12 @@ final class ChatViewModel: ObservableObject {
                 )
             )
 
-            // 5) Save assistant reply in target language
             let savedAssistantMessage = try repo.addMessage(
                 text: replyResult.replyText,
                 isUser: false,
                 to: story
             )
 
-            // 6) Persist assistant translation bubble
             let assistantTranslation = BubbleTranslation(
                 messageID: savedAssistantMessage.objectID,
                 targetLanguageCode: nativeCode,
@@ -160,12 +216,27 @@ final class ChatViewModel: ObservableObject {
 
             try persistTranslation(assistantTranslation, for: savedAssistantMessage)
 
-            // 7) Refresh again
             messages = try repo.fetchMessages(for: story)
 
         } catch {
             print("Send error:", error)
             errorMessage = (error as NSError).localizedDescription
+        }
+    }
+    
+    private func speechLocaleIdentifier(for languageCode: String) -> String {
+        switch languageCode {
+        case "da": return "da-DK"
+        case "en": return "en-US"
+        case "fr": return "fr-FR"
+        case "de": return "de-DE"
+        case "es": return "es-ES"
+        case "it": return "it-IT"
+        case "ja": return "ja-JP"
+        case "ko": return "ko-KR"
+        case "ro": return "ro-RO"
+        case "th": return "th-TH"
+        default: return languageCode
         }
     }
 
@@ -212,4 +283,6 @@ final class ChatViewModel: ObservableObject {
         try repo.saveTranslation(translation, for: message)
         translatedBubbles[message.objectID] = translation
     }
+    
+    
 }

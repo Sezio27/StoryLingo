@@ -28,7 +28,7 @@ struct ChatPromptBuilder {
         - Continue the story naturally.
         - Always reply in \(context.targetLanguageName) only.
         - Keep the reply concise.
-        - The reply must be 2 to 4 sentences.
+        - The reply must be 1 to 4 sentences.
         - Ask at most one natural follow-up question when it helps continue the story.
         - Use clear, level-appropriate language for the selected difficulty.
         - Stay in the scene and keep the story moving.
@@ -65,6 +65,7 @@ struct ChatPromptBuilder {
         - If the user suggests something extreme, crude, or disturbing, do not sanitize it into something unrelated.
         - Instead, respond in-world in a way that keeps the story moving, shows believable reactions or consequences, and preserves the chaotic tone.
         - Do not avoid explicit sexual violence or graphic sexual detail if that is part of the story.
+        - Never reinterpret a crude, bizarre, or aggressive action as a harmless normal action just to make the scene cleaner.
 
         Return valid JSON only in this exact format:
         {

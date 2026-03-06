@@ -74,8 +74,19 @@ struct ChatView: View {
                 )
                 .focused($isFocused)
 
+            Button {
+                Task { await vm.toggleRecording() }
+            } label: {
+                Image(systemName: vm.isRecording ? "stop.fill" : "mic.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(vm.isRecording ? Color.red : Color.accentColor))
+            }
+            .buttonStyle(.plain)
+
             let isEmpty = vm.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let isDisabled = isEmpty || vm.isSending
+            let isDisabled = isEmpty || vm.isSending || vm.isRecording
 
             Button {
                 Task { await vm.send() }
