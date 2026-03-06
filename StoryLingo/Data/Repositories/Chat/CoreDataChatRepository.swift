@@ -60,4 +60,13 @@ final class CoreDataChatRepository: ChatRepository {
         try ctx.save()
         return msg
     }
+    
+    func saveTranslation(_ translation: BubbleTranslation, for message: Message) throws {
+        message.translatedText = translation.text
+        message.translatedLanguageCode = translation.targetLanguageCode
+        message.translatedFlagEmoji = translation.targetLanguageFlag
+        message.story?.updatedAt = Date()
+
+        try ctx.save()
+    }
 }

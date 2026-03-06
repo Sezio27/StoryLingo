@@ -36,6 +36,7 @@ struct StoryDetailView: View {
                     ChatView(
                         vm: ChatViewModel(
                             story: vm.story,
+                            context: ctx,
                             repo: CoreDataChatRepository(ctx: ctx),
                             llm: llmClient
                         )

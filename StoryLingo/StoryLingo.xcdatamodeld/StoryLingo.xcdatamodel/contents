@@ -32,6 +32,9 @@
         <attribute name="roleRaw" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="text" attributeType="String"/>
         <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="translatedFlagEmoji" optional="YES" attributeType="String"/>
+        <attribute name="translatedLanguageCode" optional="YES" attributeType="String"/>
+        <attribute name="translatedText" optional="YES" attributeType="String"/>
         <attribute name="translation" optional="YES" attributeType="String"/>
         <relationship name="story" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Story" inverseName="messages" inverseEntity="Story"/>
         <uniquenessConstraints>

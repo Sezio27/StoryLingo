@@ -39,7 +39,14 @@ struct StoriesListView: View {
             // push chat
             NavigationLink(isActive: $goToChat) {
                 if let story = activeStory {
-                    ChatView(vm: ChatViewModel(story: story, repo: CoreDataChatRepository(ctx: ctx), llm: llmClient))
+                    ChatView(
+                        vm: ChatViewModel(
+                            story: story,
+                            context: ctx,
+                            repo: CoreDataChatRepository(ctx: ctx),
+                            llm: llmClient
+                        )
+                    )
                 }
             } label: { EmptyView() }
             .hidden()
