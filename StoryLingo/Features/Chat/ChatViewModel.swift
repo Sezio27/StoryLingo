@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreData
+import AVFoundation
 internal import Combine
 
 @MainActor
@@ -19,16 +20,24 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var translatedBubbles: [NSManagedObjectID: BubbleTranslation] = [:]
     @Published var isRecording = false
     @Published var speechTranscript = ""
+    @Published var isSpeaking = false
+    @Published var recordingElapsedSeconds: Int = 0
+    @Published var maxRecordingSeconds: Int = 15
 
     let story: Story
-    
+
     private let speechService: SpeechRecognizerServiceProtocol
+    private let speechSynthesizer: any SpeechSynthesizing
+    private let audioPlayer: AudioPlaying
     private let context: NSManagedObjectContext
     private let repo: ChatRepository
     private let llm: LLMClient
     private let settingsRepository: AppSettingsRepositoryProtocol
     private let translator: TranslatorClient
     private let replyGenerator: ChatReplyGenerating
+    private var hasSubmittedCurrentRecording = false
+    private var recordingTimerTask: Task<Void, Never>?
+    private var shouldSendAfterRecording = true
 
     init(
         story: Story,
@@ -38,7 +47,9 @@ final class ChatViewModel: ObservableObject {
         settingsRepository: AppSettingsRepositoryProtocol = AppSettingsRepository(),
         translator: TranslatorClient? = nil,
         replyGenerator: ChatReplyGenerating? = nil,
-        speechService: SpeechRecognizerServiceProtocol? = nil
+        speechService: SpeechRecognizerServiceProtocol,
+        speechSynthesizer: any SpeechSynthesizing,
+        audioPlayer: AudioPlaying? = nil
     ) {
         self.story = story
         self.context = context
@@ -47,8 +58,11 @@ final class ChatViewModel: ObservableObject {
         self.settingsRepository = settingsRepository
         self.translator = translator ?? LLMTranslatorClient(llm: llm)
         self.replyGenerator = replyGenerator ?? LLMChatReplyGenerator(llm: llm)
-        self.speechService = speechService ?? SpeechRecognizerService()
+        self.speechService = speechService
+        self.speechSynthesizer = speechSynthesizer
+        self.audioPlayer = audioPlayer ?? AudioPlaybackService()
     }
+
 
     func load() {
         do {
@@ -79,24 +93,26 @@ final class ChatViewModel: ObservableObject {
         translatedBubbles[message.objectID]
     }
     
-    func toggleRecording() async {
-        if isRecording {
-            stopRecording()
-            return
-        }
+    func startRecording() async {
+        guard !isRecording else { return }
 
         errorMessage = nil
 
         let granted = await speechService.requestPermissions()
         guard granted else {
-            errorMessage = "Microphone or speech recognition permission was denied."
+            errorMessage = "Microphone permission was denied."
             return
         }
 
         let localeIdentifier = speechLocaleIdentifier(for: story.language?.code ?? "en")
 
         do {
+            audioPlayer.stop()
             speechTranscript = ""
+            hasSubmittedCurrentRecording = false
+            recordingElapsedSeconds = 0
+            shouldSendAfterRecording = true
+
             try speechService.startRecording(
                 localeIdentifier: localeIdentifier,
                 onText: { [weak self] text in
@@ -107,120 +123,188 @@ final class ChatViewModel: ObservableObject {
                     guard let self else { return }
 
                     let finalText = self.speechTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+
                     self.isRecording = false
+                    self.stopRecordingTimer()
+
+                    guard self.shouldSendAfterRecording else {
+                        self.speechTranscript = ""
+                        self.shouldSendAfterRecording = true
+                        return
+                    }
 
                     guard !finalText.isEmpty else { return }
+                    guard !self.hasSubmittedCurrentRecording else { return }
+
+                    self.hasSubmittedCurrentRecording = true
+                    self.speechTranscript = ""
+                    self.shouldSendAfterRecording = true
 
                     Task {
                         await self.sendMessage(finalText)
-                        self.speechTranscript = ""
                     }
                 }
             )
+
             isRecording = true
+            startRecordingTimer()
         } catch {
             errorMessage = (error as NSError).localizedDescription
             isRecording = false
+            stopRecordingTimer()
         }
+    }
+    
+    func cancelRecording() {
+        guard isRecording else { return }
+        shouldSendAfterRecording = false
+        speechService.cancelRecording()
+        isRecording = false
+        stopRecordingTimer()
+        speechTranscript = ""
     }
 
     func stopRecording() {
+        guard isRecording else { return }
         speechService.stopRecording()
         isRecording = false
+        stopRecordingTimer()
+    }
+    
+    private func startRecordingTimer() {
+        stopRecordingTimer()
+
+        recordingTimerTask = Task { [weak self] in
+            guard let self else { return }
+
+            while !Task.isCancelled && self.isRecording && self.recordingElapsedSeconds < self.maxRecordingSeconds {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+
+                guard !Task.isCancelled, self.isRecording else { return }
+
+                self.recordingElapsedSeconds += 1
+            }
+        }
     }
 
-    func send() async {
-        let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-
-        composerText = ""
-        await sendMessage(text)
+    private func stopRecordingTimer() {
+        recordingTimerTask?.cancel()
+        recordingTimerTask = nil
+        recordingElapsedSeconds = 0
     }
 
     private func sendMessage(_ rawText: String) async {
-        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+            let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return }
 
-        errorMessage = nil
-        isSending = true
-        defer { isSending = false }
+            errorMessage = nil
+            isSending = true
+            defer { isSending = false }
+
+            do {
+                let settings = try settingsRepository.fetchOrCreate(in: context)
+
+                guard
+                    let nativeLanguage = settings.nativeLanguage,
+                    let targetLanguage = story.language,
+                    let nativeCode = nativeLanguage.code,
+                    let nativeName = nativeLanguage.displayName,
+                    let targetCode = targetLanguage.code,
+                    let targetName = targetLanguage.displayName
+                else {
+                    throw NSError(
+                        domain: "ChatViewModel",
+                        code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: "Missing native or target language."]
+                    )
+                }
+
+                let difficulty = DifficultyLevel(rawValue: settings.level) ?? .intermediate
+
+                let savedUserMessage = try repo.addMessage(text: text, isUser: true, to: story)
+
+                if let userTranslation = try await translateUserMessage(
+                    savedUserMessage,
+                    nativeLanguage: nativeLanguage,
+                    nativeCode: nativeCode,
+                    nativeName: nativeName,
+                    targetLanguage: targetLanguage,
+                    targetCode: targetCode,
+                    targetName: targetName
+                ) {
+                    try persistTranslation(userTranslation, for: savedUserMessage)
+                }
+
+                let history = try repo.fetchMessages(for: story)
+                messages = history
+
+                let tail = history.suffix(30)
+                let llmHistory: [LLMMessage] = tail.map {
+                    .init(role: $0.isUser ? .user : .assistant, content: $0.text ?? "")
+                }
+
+                let replyResult = try await replyGenerator.generateReply(
+                    history: llmHistory,
+                    context: ChatPromptContext(
+                        nativeLanguageCode: nativeCode,
+                        nativeLanguageName: nativeName,
+                        targetLanguageCode: targetCode,
+                        targetLanguageName: targetName,
+                        difficulty: difficulty
+                    )
+                )
+
+                let savedAssistantMessage = try repo.addMessage(
+                    text: replyResult.replyText,
+                    isUser: false,
+                    to: story
+                )
+
+                let assistantTranslation = BubbleTranslation(
+                    messageID: savedAssistantMessage.objectID,
+                    targetLanguageCode: nativeCode,
+                    targetLanguageFlag: nativeLanguage.flagEmoji ?? "",
+                    text: replyResult.translatedText
+                )
+
+                try persistTranslation(assistantTranslation, for: savedAssistantMessage)
+                messages = try repo.fetchMessages(for: story)
+
+                await speakAssistantReply(replyResult.replyText, languageCode: targetCode)
+            } catch {
+                print("Send error:", error)
+                errorMessage = (error as NSError).localizedDescription
+            }
+        }
+    
+    private func speakAssistantReply(_ text: String, languageCode: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
 
         do {
-            let settings = try settingsRepository.fetchOrCreate(in: context)
+            isSpeaking = true
+            defer { isSpeaking = false }
 
-            guard
-                let nativeLanguage = settings.nativeLanguage,
-                let targetLanguage = story.language,
-                let nativeCode = nativeLanguage.code,
-                let nativeName = nativeLanguage.displayName,
-                let targetCode = targetLanguage.code,
-                let targetName = targetLanguage.displayName
-            else {
-                throw NSError(
-                    domain: "ChatViewModel",
-                    code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "Missing native or target language."]
-                )
-            }
-
-            let difficulty = DifficultyLevel(rawValue: settings.level) ?? .intermediate
-
-            let savedUserMessage = try repo.addMessage(text: text, isUser: true, to: story)
-
-            if let userTranslation = try await translateUserMessage(
-                savedUserMessage,
-                nativeLanguage: nativeLanguage,
-                nativeCode: nativeCode,
-                nativeName: nativeName,
-                targetLanguage: targetLanguage,
-                targetCode: targetCode,
-                targetName: targetName
-            ) {
-                try persistTranslation(userTranslation, for: savedUserMessage)
-            }
-
-            let history = try repo.fetchMessages(for: story)
-            messages = history
-
-            let tail = history.suffix(30)
-            let llmHistory: [LLMMessage] = tail.map {
-                .init(
-                    role: $0.isUser ? .user : .assistant,
-                    content: $0.text ?? ""
-                )
-            }
-
-            let replyResult = try await replyGenerator.generateReply(
-                history: llmHistory,
-                context: ChatPromptContext(
-                    nativeLanguageCode: nativeCode,
-                    nativeLanguageName: nativeName,
-                    targetLanguageCode: targetCode,
-                    targetLanguageName: targetName,
-                    difficulty: difficulty
-                )
+            let stream = speechSynthesizer.synthesizeSpeechStream(
+                from: trimmed,
+                voice: voiceForLanguage(languageCode),
+                speed: nil
             )
 
-            let savedAssistantMessage = try repo.addMessage(
-                text: replyResult.replyText,
-                isUser: false,
-                to: story
-            )
-
-            let assistantTranslation = BubbleTranslation(
-                messageID: savedAssistantMessage.objectID,
-                targetLanguageCode: nativeCode,
-                targetLanguageFlag: nativeLanguage.flagEmoji ?? "🌐",
-                text: replyResult.translatedText
-            )
-
-            try persistTranslation(assistantTranslation, for: savedAssistantMessage)
-
-            messages = try repo.fetchMessages(for: story)
-
+            try await audioPlayer.playPCMStream(stream)
         } catch {
-            print("Send error:", error)
-            errorMessage = (error as NSError).localizedDescription
+            print("TTS stream error:", error)
+        }
+    }
+
+    private func voiceForLanguage(_ languageCode: String) -> String {
+        switch languageCode {
+        case "en": return "alloy"
+        case "da": return "alloy"
+        case "fr": return "verse"
+        case "es": return "verse"
+        case "de": return "alloy"
+        default: return "alloy"
         }
     }
     
@@ -283,6 +367,10 @@ final class ChatViewModel: ObservableObject {
         try repo.saveTranslation(translation, for: message)
         translatedBubbles[message.objectID] = translation
     }
+    
+    deinit {
+            recordingTimerTask?.cancel()
+        }
     
     
 }

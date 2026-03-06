@@ -1,3 +1,4 @@
+
 import SwiftUI
 import CoreData
 
@@ -5,9 +6,12 @@ struct HomeView: View {
     @ObservedObject var settings: AppSettings
     @Environment(\.managedObjectContext) private var ctx
     @Environment(\.llmClient) private var llmClient
+    @Environment(\.speechSynthesizer) private var speechSynthesizer
+    @Environment(\.speechRecognizerService) private var speechRecognizerService
+    
     @State private var goToCreateStory = false
     @State private var goToChat = false
-        @State private var activeStory: Story?
+    @State private var activeStory: Story?
 
     var body: some View {
     
@@ -27,12 +31,14 @@ struct HomeView: View {
                                        NavigationLink(isActive: $goToChat) {
                                            if let story = activeStory {
                                                ChatView(
-                                                   vm: ChatViewModel(
-                                                       story: story,
-                                                       context: ctx,
-                                                       repo: CoreDataChatRepository(ctx: ctx),
-                                                       llm: llmClient
-                                                   )
+                                                vm: ChatViewModel(
+                                                                story: story,
+                                                                context: ctx,
+                                                                repo: CoreDataChatRepository(ctx: ctx),
+                                                                llm: llmClient,
+                                                                speechService: speechRecognizerService,
+                                                                speechSynthesizer: speechSynthesizer
+                                                            )
                                                )
                                            }
                                        } label: { EmptyView() }

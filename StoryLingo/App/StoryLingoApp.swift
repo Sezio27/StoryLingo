@@ -18,6 +18,8 @@ struct StoryLingoApp: App {
             RootView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environment(\.llmClient, appContainer.llmClient)
+                .environment(\.speechSynthesizer, appContainer.speechSynthesizer)
+                .environment(\.speechRecognizerService, appContainer.speechRecognizerService)
         }
     }
 }

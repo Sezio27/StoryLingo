@@ -6,6 +6,8 @@ struct StoriesListView: View {
     private let ctx: NSManagedObjectContext
     @StateObject private var vm: StoriesListViewModel
     @Environment(\.llmClient) private var llmClient
+    @Environment(\.speechSynthesizer) private var speechSynthesizer
+    @Environment(\.speechRecognizerService) private var speechRecognizerService
     @State private var goToCreateStory = false
     @State private var goToChat = false
     @State private var activeStory: Story?
@@ -44,7 +46,9 @@ struct StoriesListView: View {
                             story: story,
                             context: ctx,
                             repo: CoreDataChatRepository(ctx: ctx),
-                            llm: llmClient
+                            llm: llmClient,
+                            speechService: speechRecognizerService,
+                            speechSynthesizer: speechSynthesizer
                         )
                     )
                 }

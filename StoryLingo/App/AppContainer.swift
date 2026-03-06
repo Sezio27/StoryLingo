@@ -9,12 +9,19 @@ import Foundation
 
 final class AppContainer {
     let llmClient: any LLMClient
+    let speechSynthesizer: any SpeechSynthesizing
+    let speechRecognizerService: SpeechRecognizerServiceProtocol
 
     init() {
-        // DEV: read from Info.plist key "OPENAI_API_KEY"
-        // (Set it via a Secrets.xcconfig -> Info.plist substitution, and don't commit it.)
         let key = (Bundle.main.object(forInfoDictionaryKey: "OPENAI_API_KEY") as? String) ?? ""
-      
+
         llmClient = OpenAIClient(config: .init(apiKey: key))
+        speechSynthesizer = OpenAITTSService(apiKey: key)
+
+        let transcriber = OpenAITranscriptionService(
+            apiKey: key,
+            model: "gpt-4o-mini-transcribe"
+        )
+        speechRecognizerService = SpeechRecognizerService(transcriber: transcriber)
     }
 }

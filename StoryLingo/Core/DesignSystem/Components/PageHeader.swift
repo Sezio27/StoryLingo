@@ -23,13 +23,14 @@ struct PageHeader: View {
                         .shadow(color: .black.opacity(0.08), radius: 14, y: 10)
                 }
                 .buttonStyle(.plain)
+                .padding(.top, 10)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.system(size: 25, weight: .bold))
                 Text(subtitle)
-                    .font(.system(size: 18))
+                    .font(.system(size: 16))
                     .foregroundStyle(.secondary)
             }
             .padding(.top, 10)

@@ -10,13 +10,13 @@ import CoreData
 
 struct ChatView: View {
     @StateObject var vm: ChatViewModel
-    @FocusState private var isFocused: Bool
 
     var body: some View {
         PageScaffold(
             title: vm.story.title ?? "New Story",
-            subtitle: "Type messages to build your story",
-            showsBackButton: true
+            subtitle: "Hold the microphone to speak",
+            contentHorizontalPadding: 2,
+            showsBackButton: true,
         ) {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -59,58 +59,27 @@ struct ChatView: View {
     }
 
     private var composer: some View {
-        HStack(spacing: 10) {
-            TextField("Message", text: $vm.composerText, axis: .vertical)
-                .textFieldStyle(.plain)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(.systemBackground))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-                        )
-                )
-                .focused($isFocused)
+        VStack(spacing: 10) {
+            Text(vm.isRecording ? "\(vm.recordingElapsedSeconds) / \(vm.maxRecordingSeconds) sec" : "Hold to speak")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(vm.isRecording ? .primary : .secondary)
 
-            Button {
-                Task { await vm.toggleRecording() }
-            } label: {
-                Image(systemName: vm.isRecording ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(vm.isRecording ? Color.red : Color.accentColor))
-            }
-            .buttonStyle(.plain)
-
-            let isEmpty = vm.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let isDisabled = isEmpty || vm.isSending || vm.isRecording
-
-            Button {
-                Task { await vm.send() }
-            } label: {
-                Group {
-                    if vm.isSending {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
+            HoldToRecordButton(
+                isRecording: vm.isRecording,
+                isDisabled: vm.isSending || vm.isSpeaking,
+                onPress: {
+                    Task { await vm.startRecording() }
+                },
+                onRelease: {
+                    vm.stopRecording()
+                },
+                onCancel: {
+                    vm.cancelRecording()
                 }
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(Color.accentColor))
-            }
-            .buttonStyle(.plain)
-            .disabled(isDisabled)
-            .opacity(isDisabled ? 0.4 : 1)
+            )
         }
-        .padding(.horizontal, 22)
+        .frame(maxWidth: .infinity)
         .padding(.top, 10)
-        .padding(.bottom, 12)
         .background(Color(.systemGroupedBackground))
         .overlay(Divider(), alignment: .top)
     }
@@ -158,5 +127,129 @@ private struct ChatBubble: View {
         }
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
         .padding(.horizontal, 22)
+        .padding(.bottom, 10)
+    }
+}
+
+private struct HoldToRecordButton: View {
+    let isRecording: Bool
+    let isDisabled: Bool
+    let onPress: () -> Void
+    let onRelease: () -> Void
+    let onCancel: () -> Void
+
+    @State private var didStartPress = false
+    @State private var dragOffset: CGSize = .zero
+    @State private var isOverCancelZone = false
+
+    private let cancelThreshold: CGFloat = -120
+    private let trashXOffset: CGFloat = -110
+
+    private var progressToCancel: CGFloat {
+        min(max(abs(dragOffset.width) / abs(cancelThreshold), 0), 1)
+    }
+
+    private var micScale: CGFloat {
+        1.0 - (0.42 * progressToCancel)
+    }
+
+    private var trashCircleScale: CGFloat {
+        isOverCancelZone ? 1.0 : (0.82 + 0.18 * progressToCancel)
+    }
+
+    private var trashCircleOpacity: Double {
+        isRecording || didStartPress ? (isOverCancelZone ? 1.0 : 0.35 + 0.45 * Double(progressToCancel)) : 0
+    }
+
+    var body: some View {
+        ZStack {
+            if didStartPress || isRecording {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .stroke(
+                                isOverCancelZone ? Color.red : Color.secondary.opacity(0.35),
+                                lineWidth: isOverCancelZone ? 3 : 2
+                            )
+                            .frame(width: 58, height: 58)
+                            .scaleEffect(trashCircleScale)
+                            .opacity(trashCircleOpacity)
+
+                        Circle()
+                            .fill(isOverCancelZone ? Color.red.opacity(0.12) : Color.clear)
+                            .frame(width: 58, height: 58)
+                            .scaleEffect(trashCircleScale)
+                            .opacity(trashCircleOpacity)
+
+                        Image(systemName: "trash")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(isOverCancelZone ? .red : .secondary)
+                            .scaleEffect(isOverCancelZone ? 1.08 : 1.0)
+                    }
+                    .frame(width: 60, height: 60)
+
+                    HStack(spacing: 2) {
+                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.left")
+                    }
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(isOverCancelZone ? .red : .secondary.opacity(0.75))
+                    .opacity(isOverCancelZone ? 0.72 : 1.0)
+                }
+                .offset(x: trashXOffset)
+                .transition(.opacity)
+            }
+
+            Circle()
+                .fill(isDisabled ? Color.gray.opacity(0.35) : (isRecording ? Color.red : Color.accentColor))
+                .frame(width: 720, height: 72)
+                .overlay(
+                    Image(systemName: isRecording ? "waveform" : "mic.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                )
+                .scaleEffect((isRecording ? 1.06 : 1.0) * micScale)
+                .offset(x: dragOffset.width)
+                .opacity(isOverCancelZone ? 0.92 : 1.0)
+                .animation(.spring(response: 0.22, dampingFraction: 0.78), value: isRecording)
+                .animation(.spring(response: 0.22, dampingFraction: 0.78), value: dragOffset)
+                .animation(.spring(response: 0.22, dampingFraction: 0.78), value: isOverCancelZone)
+                .contentShape(Circle())
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            guard !isDisabled else { return }
+
+                            if !didStartPress {
+                                didStartPress = true
+                                onPress()
+                            }
+
+                            let x = min(0, value.translation.width)
+                            dragOffset = CGSize(width: x, height: 0)
+
+                            let micCenterX = x
+                            let distanceToTrash = abs(micCenterX - trashXOffset)
+                            isOverCancelZone = distanceToTrash < 36
+                        }
+                        .onEnded { _ in
+                            guard didStartPress else { return }
+
+                            let shouldCancel = isOverCancelZone
+
+                            didStartPress = false
+                            dragOffset = .zero
+                            isOverCancelZone = false
+
+                            if shouldCancel {
+                                onCancel()
+                            } else {
+                                onRelease()
+                            }
+                        }
+                )
+        }
+        .frame(width: 250, height: 80)
     }
 }

@@ -1,12 +1,4 @@
-//
-//  SpeechRecognizerService.swift
-//  StoryLingo
-//
-//  Created by Jakob Jacobsen on 06/03/2026.
-//
-
 import Foundation
-import Speech
 import AVFoundation
 
 @MainActor
@@ -19,31 +11,34 @@ protocol SpeechRecognizerServiceProtocol: AnyObject {
         onFinish: @escaping () -> Void
     ) throws
     func stopRecording()
+    func cancelRecording()
 }
 
 @MainActor
 final class SpeechRecognizerService: NSObject, SpeechRecognizerServiceProtocol {
-    private let audioEngine = AVAudioEngine()
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
+    private let transcriber: AudioTranscribing
+    private var recorder: AVAudioRecorder?
     private var stopTask: Task<Void, Never>?
-
+    private var onText: ((String) -> Void)?
+    private var onFinish: (() -> Void)?
+    private var localeIdentifier: String?
+    private var currentRecordingURL: URL?
+    private let maxRecordingSeconds: Double = 15
+    private var shouldTranscribeAfterStop = true
+    
     private(set) var isRecording = false
 
-    func requestPermissions() async -> Bool {
-        let speechAuthorized = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
+    init(transcriber: AudioTranscribing) {
+        self.transcriber = transcriber
+        super.init()
+    }
 
-        let micAuthorized = await withCheckedContinuation { continuation in
+    func requestPermissions() async -> Bool {
+        await withCheckedContinuation { continuation in
             AVAudioSession.sharedInstance().requestRecordPermission { granted in
                 continuation.resume(returning: granted)
             }
         }
-
-        return speechAuthorized && micAuthorized
     }
 
     func startRecording(
@@ -53,83 +48,123 @@ final class SpeechRecognizerService: NSObject, SpeechRecognizerServiceProtocol {
     ) throws {
         stopRecording()
 
-        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier)),
-              recognizer.isAvailable else {
-            throw NSError(
-                domain: "SpeechRecognizerService",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Speech recognition is unavailable for this language."]
-            )
-        }
+        self.onText = onText
+        self.onFinish = onFinish
+        self.localeIdentifier = localeIdentifier
+        self.shouldTranscribeAfterStop = true
 
         let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers])
+        try audioSession.setCategory(.record, mode: .spokenAudio, options: [.duckOthers])
         try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        if #available(iOS 16, *) {
-            request.addsPunctuation = false
-        }
-        recognitionRequest = request
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("m4a")
 
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 16_000,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
+        ]
 
-        inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            self?.recognitionRequest?.append(buffer)
-        }
+        let recorder = try AVAudioRecorder(url: url, settings: settings)
+        recorder.prepareToRecord()
+        recorder.record()
 
-        audioEngine.prepare()
-        try audioEngine.start()
-
-        isRecording = true
-
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            guard let self else { return }
-
-            if let result {
-                onText(result.bestTranscription.formattedString)
-
-                if result.isFinal {
-                    self.stopRecording()
-                    onFinish()
-                }
-            }
-
-            if error != nil {
-                self.stopRecording()
-                onFinish()
-            }
-        }
+        self.recorder = recorder
+        self.currentRecordingURL = url
+        self.isRecording = true
 
         stopTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(maxRecordingSeconds * 1_000_000_000))
             guard let self, self.isRecording else { return }
-            self.stopRecording()
-            onFinish()
+            await self.finishRecordingAndTranscribe()
         }
     }
 
     func stopRecording() {
         guard isRecording else { return }
+        Task { await finishRecordingAndTranscribe() }
+    }
+    
+    func cancelRecording() {
+        guard isRecording else { return }
+
+        shouldTranscribeAfterStop = false
+        stopTask?.cancel()
+        stopTask = nil
+
+        recorder?.stop()
+        let fileURL = currentRecordingURL
+
+        recorder = nil
+        currentRecordingURL = nil
+        isRecording = false
+
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+
+        if let fileURL {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+
+        onText = nil
+        onFinish = nil
+    }
+
+    private func finishRecordingAndTranscribe() async {
+        guard isRecording else { return }
 
         stopTask?.cancel()
         stopTask = nil
 
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
+        recorder?.stop()
+        let fileURL = currentRecordingURL
 
-        recognitionRequest?.endAudio()
-        recognitionTask?.cancel()
-
-        recognitionRequest = nil
-        recognitionTask = nil
+        recorder = nil
+        currentRecordingURL = nil
+        isRecording = false
 
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 
-        isRecording = false
+        guard shouldTranscribeAfterStop else {
+            if let fileURL {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+            onText = nil
+            onFinish = nil
+            shouldTranscribeAfterStop = true
+            return
+        }
+
+        guard let fileURL else {
+            onFinish?()
+            return
+        }
+
+        do {
+            let languageCode = localeLanguageCode(from: localeIdentifier)
+            let transcript = try await transcriber.transcribeAudio(
+                fileURL: fileURL,
+                language: languageCode
+            )
+
+            onText?(transcript)
+        } catch {
+            print("Transcription error:", error)
+        }
+
+        onFinish?()
+
+        try? FileManager.default.removeItem(at: fileURL)
+        onText = nil
+        onFinish = nil
+        shouldTranscribeAfterStop = true
+    }
+
+    private func localeLanguageCode(from localeIdentifier: String?) -> String? {
+        guard let localeIdentifier else { return nil }
+        return localeIdentifier.split(separator: "-").first.map(String.init)
     }
 
     deinit {

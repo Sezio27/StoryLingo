@@ -10,7 +10,9 @@ struct StoryDetailView: View {
     @State private var goToChat = false
     @State private var showDeleteConfirm = false
     @Environment(\.llmClient) private var llmClient
-
+    @Environment(\.speechSynthesizer) private var speechSynthesizer
+    @Environment(\.speechRecognizerService) private var speechRecognizerService
+    
     init(story: Story, ctx: NSManagedObjectContext) {
         self.ctx = ctx
         _vm = StateObject(
@@ -38,7 +40,9 @@ struct StoryDetailView: View {
                             story: vm.story,
                             context: ctx,
                             repo: CoreDataChatRepository(ctx: ctx),
-                            llm: llmClient
+                            llm: llmClient,
+                            speechService: speechRecognizerService,
+                            speechSynthesizer: speechSynthesizer
                         )
                     )
                 } label: { EmptyView() }
