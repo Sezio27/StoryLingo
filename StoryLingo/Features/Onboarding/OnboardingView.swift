@@ -1,69 +1,104 @@
+//
+//  OnboardingView.swift
+//  StoryLingo
+//
+//  Created by Jakob Jacobsen on 12/02/2026.
+//
+
 import SwiftUI
 import CoreData
 
 struct OnboardingView: View {
     @Environment(\.managedObjectContext) private var ctx
 
-    @FetchRequest(sortDescriptors: [], animation: .default)
-    private var settingsResults: FetchedResults<AppSettings>
-
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \Language.displayName, ascending: true)],
         animation: .default
-    ) private var languages: FetchedResults<Language>
+    )
+    private var languages: FetchedResults<Language>
 
-    @State private var query = ""
-    @State private var selectedLanguage: Language?
-    @State private var difficulty: DifficultyLevel = .intermediate
+    @StateObject private var vm = OnboardingViewModel()
+
+    @State private var isNativeExpanded = true
+    @State private var isTargetExpanded = true
 
     private var filteredLanguages: [Language] {
-        let all = Array(languages)
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return all }
+        vm.filteredLanguages(from: Array(languages))
+    }
 
-        return all.filter {
-            ($0.displayName ?? "").localizedCaseInsensitiveContains(q) ||
-            ($0.code ?? "").localizedCaseInsensitiveContains(q)
+    private var nativeLanguagesToShow: [Language] {
+        if isNativeExpanded || vm.selectedNativeLanguage == nil {
+            return filteredLanguages
         }
+        return vm.selectedNativeLanguage.map { [$0] } ?? []
+    }
+
+    private var targetLanguagesToShow: [Language] {
+        if isTargetExpanded || vm.selectedTargetLanguage == nil {
+            return filteredLanguages
+        }
+        return vm.selectedTargetLanguage.map { [$0] } ?? []
     }
 
     var body: some View {
         PageScaffold(
             title: "Welcome",
-            subtitle: "Pick a language and difficulty to start your first story."
+            subtitle: "Pick your native language, target language and difficulty to start your first story."
         ) {
             ScrollView {
                 VStack(spacing: 14) {
-                    
 
                     SettingsCard {
                         VStack(spacing: 0) {
-                            SectionHeader("Choose a language")
+                            SectionHeader("Choose your native language")
 
-                            ForEach(filteredLanguages, id: \.objectID) { lang in
+                            ForEach(nativeLanguagesToShow, id: \.objectID) { lang in
                                 LanguageRow(
                                     flag: lang.flagEmoji ?? "🌍",
                                     name: lang.displayName ?? "—",
                                     code: (lang.code ?? "—").uppercased(),
-                                    isSelected: lang.objectID == selectedLanguage?.objectID
+                                    isSelected: lang.objectID == vm.selectedNativeLanguage?.objectID
                                 )
                                 .contentShape(Rectangle())
-                                .onTapGesture { selectedLanguage = lang }
+                                .onTapGesture {
+                                    handleNativeTap(lang)
+                                }
 
-                                if lang.objectID != filteredLanguages.last?.objectID {
+                                if lang.objectID != nativeLanguagesToShow.last?.objectID {
                                     Divider().padding(.leading, 56)
                                 }
                             }
 
-                            if filteredLanguages.isEmpty {
-                                VStack(spacing: 8) {
-                                    Text("No languages found")
-                                        .font(.system(size: 16, weight: .semibold))
-                                    Text("Try a different search.")
-                                        .foregroundStyle(.secondary)
+                            if nativeLanguagesToShow.isEmpty {
+                                EmptyLanguagesView()
+                            }
+                        }
+                        .padding(.vertical, 8)
+                    }
+
+                    SettingsCard {
+                        VStack(spacing: 0) {
+                            SectionHeader("Choose a target language")
+
+                            ForEach(targetLanguagesToShow, id: \.objectID) { lang in
+                                LanguageRow(
+                                    flag: lang.flagEmoji ?? "🌍",
+                                    name: lang.displayName ?? "—",
+                                    code: (lang.code ?? "—").uppercased(),
+                                    isSelected: lang.objectID == vm.selectedTargetLanguage?.objectID
+                                )
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    handleTargetTap(lang)
                                 }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 20)
+
+                                if lang.objectID != targetLanguagesToShow.last?.objectID {
+                                    Divider().padding(.leading, 56)
+                                }
+                            }
+
+                            if targetLanguagesToShow.isEmpty {
+                                EmptyLanguagesView()
                             }
                         }
                         .padding(.vertical, 8)
@@ -76,49 +111,71 @@ struct OnboardingView: View {
                             DifficultyRow(
                                 title: "Beginner",
                                 subtitle: "Short sentences, lots of help",
-                                isSelected: difficulty == .beginner
-                            ) { difficulty = .beginner }
+                                isSelected: vm.difficulty == .beginner
+                            ) {
+                                vm.difficulty = .beginner
+                            }
 
                             Divider().padding(.leading, 20)
 
                             DifficultyRow(
                                 title: "Intermediate",
                                 subtitle: "More natural dialogue",
-                                isSelected: difficulty == .intermediate
-                            ) { difficulty = .intermediate }
+                                isSelected: vm.difficulty == .intermediate
+                            ) {
+                                vm.difficulty = .intermediate
+                            }
 
                             Divider().padding(.leading, 20)
 
                             DifficultyRow(
                                 title: "Advanced",
                                 subtitle: "Minimal help, more challenge",
-                                isSelected: difficulty == .advanced
-                            ) { difficulty = .advanced }
+                                isSelected: vm.difficulty == .advanced
+                            ) {
+                                vm.difficulty = .advanced
+                            }
                         }
                         .padding(.vertical, 8)
+                    }
+
+                    if let errorMessage = vm.errorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 4)
                     }
 
                     Spacer(minLength: 24)
                 }
                 .padding(.top, 6)
             }
+            .searchable(text: $vm.query, prompt: "Search languages")
             .safeAreaInset(edge: .bottom) {
                 HStack {
                     Spacer()
 
                     Button {
-                        completeOnboarding()
+                        vm.completeOnboarding(context: ctx)
                     } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 54, height: 54)
-                            .background(Circle().fill(Color.accentColor))
-                            .shadow(color: .black.opacity(0.16), radius: 14, y: 10)
+                        Group {
+                            if vm.isSaving {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .frame(width: 54, height: 54)
+                        .background(Circle().fill(Color.accentColor))
+                        .shadow(color: .black.opacity(0.16), radius: 14, y: 10)
                     }
                     .buttonStyle(.plain)
-                    .disabled(selectedLanguage == nil || settingsResults.first == nil)
-                    .opacity((selectedLanguage == nil || settingsResults.first == nil) ? 0.45 : 1)
+                    .disabled(!vm.canContinue)
+                    .opacity(vm.canContinue ? 1 : 0.45)
 
                     Spacer()
                 }
@@ -126,33 +183,40 @@ struct OnboardingView: View {
                 .background(.ultraThinMaterial)
             }
             .onAppear {
-                // Reasonable defaults when the screen opens
-                if selectedLanguage == nil {
-                    selectedLanguage = settingsResults.first?.selectedLanguage ?? languages.first
-                }
-                if let s = settingsResults.first {
-                    difficulty = DifficultyLevel(rawValue: s.level) ?? .intermediate
-                }
+                vm.load(context: ctx)
+                isNativeExpanded = vm.selectedNativeLanguage == nil
+                isTargetExpanded = vm.selectedTargetLanguage == nil
             }
         }
     }
 
-    private func completeOnboarding() {
-        guard let lang = selectedLanguage else { return }
-        guard let s = settingsResults.first else { return }
+    private func handleNativeTap(_ lang: Language) {
+        if vm.selectedNativeLanguage?.objectID == lang.objectID {
+            vm.selectedNativeLanguage = nil
+            isNativeExpanded = true
+        } else {
+            vm.selectedNativeLanguage = lang
+            isNativeExpanded = false
+        }
+    }
 
-        s.selectedLanguage = lang
-        s.level = difficulty.rawValue
-        s.hasCompletedOnboarding = true
-        s.updatedAt = Date()
-
-        ctx.saveIfNeeded()
+    private func handleTargetTap(_ lang: Language) {
+        if vm.selectedTargetLanguage?.objectID == lang.objectID {
+            vm.selectedTargetLanguage = nil
+            isTargetExpanded = true
+        } else {
+            vm.selectedTargetLanguage = lang
+            isTargetExpanded = false
+        }
     }
 }
 
 private struct SectionHeader: View {
     let title: String
-    init(_ title: String) { self.title = title }
+
+    init(_ title: String) {
+        self.title = title
+    }
 
     var body: some View {
         Text(title)
@@ -172,11 +236,14 @@ private struct LanguageRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(flag).font(.system(size: 22))
+            Text(flag)
+                .font(.system(size: 22))
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.system(size: 17, weight: .semibold))
+                Text(name)
+                    .font(.system(size: 17, weight: .semibold))
+
                 Text(code)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
@@ -203,11 +270,16 @@ private struct DifficultyRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 17, weight: .semibold))
-                Text(subtitle).font(.system(size: 13))
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+
+                Text(subtitle)
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
+
             Spacer()
+
             if isSelected {
                 Image(systemName: "checkmark")
                     .foregroundStyle(.tint)
@@ -217,5 +289,19 @@ private struct DifficultyRow: View {
         .padding(.vertical, 12)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
+    }
+}
+
+private struct EmptyLanguagesView: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("No languages found")
+                .font(.system(size: 16, weight: .semibold))
+
+            Text("Try a different search.")
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
     }
 }

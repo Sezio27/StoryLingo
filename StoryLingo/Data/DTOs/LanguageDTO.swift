@@ -15,6 +15,7 @@ struct LanguageDTO: Hashable {
 
 enum LanguageCatalog {
     static let all: [LanguageDTO] = [
+        .init(code: "en", displayName: "English", flagEmoji: "🇬🇧"),
         .init(code: "da", displayName: "Danish", flagEmoji: "🇩🇰"),
         .init(code: "de", displayName: "German", flagEmoji: "🇩🇪"),
         .init(code: "es", displayName: "Spanish", flagEmoji: "🇪🇸"),
@@ -26,7 +27,4 @@ enum LanguageCatalog {
         .init(code: "th", displayName: "Thai", flagEmoji: "🇹🇭")
     ]
 
-    static let appSupportedLanguageCodes: Set<String> = ["fr", "es", "de", "it", "da"]
-
-    static let appSupported: [LanguageDTO] = all.filter { appSupportedLanguageCodes.contains($0.code) }
 }

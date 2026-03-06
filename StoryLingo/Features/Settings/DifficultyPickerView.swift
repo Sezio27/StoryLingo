@@ -1,13 +1,14 @@
 import SwiftUI
 
 struct DifficultyPickerView: View {
-    @Binding var selection: DifficultyLevel
+    let selection: DifficultyLevel
+    let onSelect: (DifficultyLevel) -> Void
 
     var body: some View {
         List {
             ForEach(DifficultyLevel.allCases) { level in
                 Button {
-                    selection = level
+                    onSelect(level)
                 } label: {
                     HStack {
                         Text(level.title)

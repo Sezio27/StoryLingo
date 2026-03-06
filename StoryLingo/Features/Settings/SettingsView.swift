@@ -5,19 +5,12 @@ struct SettingsView: View {
     @Environment(\.managedObjectContext) private var ctx
 
     @FetchRequest(
-        entity: AppSettings.entity(),
-        sortDescriptors: []
-    ) private var settingsResults: FetchedResults<AppSettings>
-
-    @FetchRequest(
         entity: Language.entity(),
         sortDescriptors: [NSSortDescriptor(keyPath: \Language.displayName, ascending: true)]
-    ) private var languages: FetchedResults<Language>
+    )
+    private var languages: FetchedResults<Language>
 
-    private var settings: AppSettings {
-        // Assumes bootstrap ensured it exists.
-        settingsResults.first!
-    }
+    @StateObject private var vm = SettingsViewModel()
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
@@ -27,31 +20,7 @@ struct SettingsView: View {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
     }
 
-    private var selectedLanguage: Binding<Language> {
-        Binding(
-            get: { settings.selectedLanguage ?? languages.first! },
-            set: { newLang in
-                settings.selectedLanguage = newLang
-                settings.updatedAt = Date()
-                ctx.saveIfNeeded()
-            }
-        )
-    }
-
-    private var difficulty: Binding<DifficultyLevel> {
-        Binding(
-            get: { settings.difficulty },
-            set: { newLevel in
-                settings.difficulty = newLevel
-                settings.updatedAt = Date()
-                ctx.saveIfNeeded()
-            }
-        )
-    }
-
     var body: some View {
-        let lang = settings.selectedLanguage ?? languages.first
-
         PageScaffold(
             title: "Settings",
             subtitle: "Customize your learning experience"
@@ -64,22 +33,48 @@ struct SettingsView: View {
 
                     VStack(spacing: 14) {
                         SettingsNavigationCard(
-                            title: "Target Language",
-                            value: lang?.displayNameSafe ?? "—",
-                            leadingValue: lang?.flagEmojiSafe
+                            title: "Native Language",
+                            value: vm.nativeLanguage?.displayNameSafe ?? "—",
+                            leadingValue: vm.nativeLanguage?.flagEmojiSafe
                         ) {
                             LanguagePickerView(
+                                title: "Native Language",
                                 languages: Array(languages),
-                                selection: selectedLanguage
-                            )
+                                selectedLanguage: vm.nativeLanguage
+                            ) { language in
+                                vm.setNativeLanguage(language, context: ctx)
+                            }
+                        }
+
+                        SettingsNavigationCard(
+                            title: "Target Language",
+                            value: vm.targetLanguage?.displayNameSafe ?? "—",
+                            leadingValue: vm.targetLanguage?.flagEmojiSafe
+                        ) {
+                            LanguagePickerView(
+                                title: "Target Language",
+                                languages: Array(languages),
+                                selectedLanguage: vm.targetLanguage
+                            ) { language in
+                                vm.setTargetLanguage(language, context: ctx)
+                            }
                         }
 
                         SettingsNavigationCard(
                             title: "Difficulty Level",
-                            value: difficulty.wrappedValue.title
+                            value: vm.difficulty.title
                         ) {
-                            DifficultyPickerView(selection: difficulty)
+                            DifficultyPickerView(selection: vm.difficulty) { level in
+                                vm.setDifficulty(level, context: ctx)
+                            }
                         }
+                    }
+
+                    if let errorMessage = vm.errorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     Text("About")
@@ -92,6 +87,9 @@ struct SettingsView: View {
                         ("Build", appBuild),
                     ])
                 }
+            }
+            .onAppear {
+                vm.load(context: ctx)
             }
         }
     }

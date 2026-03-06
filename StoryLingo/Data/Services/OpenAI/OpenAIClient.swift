@@ -115,44 +115,4 @@ public final class OpenAIClient: LLMClient {
         throw OpenAIClientError.emptyOutputText
     }
 
-    // MARK: - DTOs
-
-    private struct ResponsesCreateRequest: Encodable {
-        let model: String
-        let input: [InputMessage]
-        let temperature: Double?
-        let maxOutputTokens: Int?
-    }
-
-    /// Responses API input message shape: { role, content }
-    private struct InputMessage: Encodable {
-        let role: String
-        let content: String
-    }
-
-    private struct ResponsesCreateResponse: Decodable {
-        let outputText: String?
-        let output: [OutputItem]?
-    }
-
-    private struct OutputItem: Decodable {
-        let type: String
-        let role: String?
-        let content: [OutputContentPart]?
-    }
-
-    private struct OutputContentPart: Decodable {
-        let type: String
-        let text: String?
-    }
-
-    private struct OpenAIErrorEnvelope: Decodable {
-        let error: OpenAIError
-    }
-
-    private struct OpenAIError: Decodable {
-        let message: String
-        let type: String?
-        let code: String?
-    }
 }
