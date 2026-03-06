@@ -13,20 +13,8 @@ enum LanguageSeeder {
     static func seedOrUpdate(context: NSManagedObjectContext) {
         // Keep it fast and safe
         context.performAndWait {
-            let seed: [(code: String, name: String, emoji: String)] = [
-                ("da", "Danish", "🇩🇰"),
-                ("de", "German", "🇩🇪"),
-                ("es", "Spanish", "🇪🇸"),
-                ("fr", "French", "🇫🇷"),
-                ("it", "Italian", "🇮🇹"),
-                ("ja", "Japanese", "🇯🇵"),
-                ("ko", "Korean", "🇰🇷"),
-                ("ro", "Romanian", "🇷🇴"),
-                ("th", "Thai", "🇹🇭")
-            ]
-
-            for item in seed {
-                upsertLanguage(code: item.code, name: item.name, emoji: item.emoji, context: context)
+            for item in LanguageCatalog.all {
+                upsertLanguage(language: item, context: context)
             }
 
             if context.hasChanges {
@@ -43,10 +31,10 @@ enum LanguageSeeder {
 
     // MARK: - Private
 
-    private static func upsertLanguage(code: String, name: String, emoji: String, context: NSManagedObjectContext) {
+    private static func upsertLanguage(language: LanguageDTO, context: NSManagedObjectContext) {
         // Fetch by unique key (code)
         let req: NSFetchRequest<Language> = Language.fetchRequest()
-        req.predicate = NSPredicate(format: "code == %@", code)
+        req.predicate = NSPredicate(format: "code == %@", language.code)
         req.fetchLimit = 1
 
         let existing = (try? context.fetch(req))?.first
@@ -54,8 +42,8 @@ enum LanguageSeeder {
         let lang = existing ?? Language(context: context)
 
         // Ensure required fields are set
-        lang.code = code
-        lang.displayName = name
-        lang.flagEmoji = emoji
+        lang.code = language.code
+        lang.displayName = language.displayName
+        lang.flagEmoji = language.flagEmoji
     }
 }
