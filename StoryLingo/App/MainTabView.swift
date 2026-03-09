@@ -24,9 +24,11 @@ struct MainTabView: View {
             .tabItem { Label("Stories", systemImage: "book") }
 
             NavigationStack {
-                StatsView()
+                StatsView(settings: settings, ctx: ctx)
             }
-            .tabItem { Label("Stats", systemImage: "chart.bar") }
+            .tabItem {
+                Label("Stats", systemImage: "chart.bar")
+            }
 
             NavigationStack {
                 SettingsView()

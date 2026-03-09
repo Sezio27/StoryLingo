@@ -23,7 +23,10 @@ final class ChatViewModel: ObservableObject {
     @Published var isSpeaking = false
     @Published var recordingElapsedSeconds: Int = 0
     @Published var maxRecordingSeconds: Int = 15
-
+    @Published var replyCards: [ReplyCardItem] = []
+    @Published var selectedReplyCardID: UUID?
+    @Published var lastSubmittedUserMessageID: NSManagedObjectID?
+    
     let story: Story
 
     private let speechService: SpeechRecognizerServiceProtocol
@@ -38,7 +41,11 @@ final class ChatViewModel: ObservableObject {
     private var hasSubmittedCurrentRecording = false
     private var recordingTimerTask: Task<Void, Never>?
     private var shouldSendAfterRecording = true
+    private let statsRepository: StatsRepository
 
+
+
+    
     init(
         story: Story,
         context: NSManagedObjectContext,
@@ -49,7 +56,8 @@ final class ChatViewModel: ObservableObject {
         replyGenerator: ChatReplyGenerating? = nil,
         speechService: SpeechRecognizerServiceProtocol,
         speechSynthesizer: any SpeechSynthesizing,
-        audioPlayer: AudioPlaying? = nil
+        audioPlayer: AudioPlaying? = nil,
+        statsRepository: StatsRepository
     ) {
         self.story = story
         self.context = context
@@ -61,6 +69,20 @@ final class ChatViewModel: ObservableObject {
         self.speechService = speechService
         self.speechSynthesizer = speechSynthesizer
         self.audioPlayer = audioPlayer ?? AudioPlaybackService()
+        self.statsRepository = statsRepository
+    }
+    
+    var visibleCategoryCards: [ReplyCardItem] {
+        replyCards.filter { $0.kind == .category }
+    }
+    
+    func dealMockReplyCards() {
+        replyCards = MockReplyCardFactory.makeHand()
+        selectedReplyCardID = nil
+    }
+
+    func selectReplyCard(_ card: ReplyCardItem) {
+        selectedReplyCardID = card.id
     }
 
 
@@ -84,6 +106,7 @@ final class ChatViewModel: ObservableObject {
                     return (message.objectID, bubble)
                 }
             )
+            dealMockReplyCards()
         } catch {
             assertionFailure("Failed to fetch messages: \(error)")
         }
@@ -222,6 +245,14 @@ final class ChatViewModel: ObservableObject {
                 let difficulty = DifficultyLevel(rawValue: settings.level) ?? .intermediate
 
                 let savedUserMessage = try repo.addMessage(text: text, isUser: true, to: story)
+                lastSubmittedUserMessageID = savedUserMessage.objectID
+                if let targetCode = story.language?.code {
+                    try statsRepository.recordUserMessage(
+                        text: text,
+                        languageCode: targetCode,
+                        at: savedUserMessage.timestamp ?? Date()
+                    )
+                }
 
                 if let userTranslation = try await translateUserMessage(
                     savedUserMessage,
@@ -269,7 +300,9 @@ final class ChatViewModel: ObservableObject {
 
                 try persistTranslation(assistantTranslation, for: savedAssistantMessage)
                 messages = try repo.fetchMessages(for: story)
-
+                // reshuffle cards after each AI response
+                dealMockReplyCards()
+                
                 await speakAssistantReply(replyResult.replyText, languageCode: targetCode)
             } catch {
                 print("Send error:", error)

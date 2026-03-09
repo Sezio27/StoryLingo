@@ -2,6 +2,7 @@ import SwiftUI
 import CoreData
 
 struct StoryDetailView: View {
+    private let story: Story
     private let ctx: NSManagedObjectContext
     @StateObject private var vm: StoryDetailViewModel
 
@@ -14,6 +15,7 @@ struct StoryDetailView: View {
     @Environment(\.speechRecognizerService) private var speechRecognizerService
     
     init(story: Story, ctx: NSManagedObjectContext) {
+        self.story = story
         self.ctx = ctx
         _vm = StateObject(
             wrappedValue: StoryDetailViewModel(
@@ -37,12 +39,13 @@ struct StoryDetailView: View {
                 NavigationLink(isActive: $goToChat) {
                     ChatView(
                         vm: ChatViewModel(
-                            story: vm.story,
+                            story: story,
                             context: ctx,
                             repo: CoreDataChatRepository(ctx: ctx),
                             llm: llmClient,
                             speechService: speechRecognizerService,
-                            speechSynthesizer: speechSynthesizer
+                            speechSynthesizer: speechSynthesizer,
+                            statsRepository: CoreDataStatsRepository(ctx: ctx)
                         )
                     )
                 } label: { EmptyView() }

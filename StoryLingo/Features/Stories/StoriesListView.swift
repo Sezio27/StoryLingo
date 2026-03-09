@@ -48,7 +48,8 @@ struct StoriesListView: View {
                             repo: CoreDataChatRepository(ctx: ctx),
                             llm: llmClient,
                             speechService: speechRecognizerService,
-                            speechSynthesizer: speechSynthesizer
+                            speechSynthesizer: speechSynthesizer,
+                            statsRepository: CoreDataStatsRepository(ctx: ctx)
                         )
                     )
                 }

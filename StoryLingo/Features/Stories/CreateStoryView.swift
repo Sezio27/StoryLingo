@@ -11,7 +11,7 @@ struct CreateStoryView: View {
     @State private var title: String = ""
     @State private var genre: String = ""
     @State private var theme: String = ""
-
+    @State private var place: String = ""
     @State private var errorMessage: String?
 
     var body: some View {
@@ -39,6 +39,12 @@ struct CreateStoryView: View {
                     placeholder: "e.g. Friendship, Courage, Survival",
                     text: $theme
                 )
+                
+                OptionalField(
+                                  label: "Place (optional)",
+                                  placeholder: "e.g. A small village, a castle, Copenhagen",
+                                  text: $place
+                              )
 
                 NewStoryButton(
                     title: "Start Story",
@@ -49,10 +55,11 @@ struct CreateStoryView: View {
                 }
                 .padding(.top, 6)
 
-                Button("Skip and use defaults") {
+                Button("Skip") {
                     title = ""
                     genre = ""
                     theme = ""
+                    place = ""
                     createStory()
                 }
                 .font(.footnote.weight(.semibold))
@@ -79,6 +86,7 @@ struct CreateStoryView: View {
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
                 genre: genre.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
                 theme: theme.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                place: place.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
                 language: settings.selectedLanguage
             )
 

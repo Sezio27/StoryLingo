@@ -10,6 +10,7 @@ import CoreData
 
 struct ChatView: View {
     @StateObject var vm: ChatViewModel
+    @State private var showReplyCards = false
 
     var body: some View {
         PageScaffold(
@@ -19,28 +20,106 @@ struct ChatView: View {
             showsBackButton: true,
         ) {
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 14) {
-                        ForEach(vm.messages, id: \.objectID) { msg in
-                            ChatBubble(
-                                text: msg.text ?? "—",
-                                isUser: msg.isUser,
-                                translation: vm.translatedBubble(for: msg)
-                            )
-                            .id(msg.objectID)
-                        }
+                ZStack {
+                    ScrollView {
+                        LazyVStack(spacing: 14) {
+                            ForEach(vm.messages, id: \.objectID) { msg in
+                                ChatBubble(
+                                    text: msg.text ?? "—",
+                                    isUser: msg.isUser,
+                                    translation: vm.translatedBubble(for: msg)
+                                )
+                                .id(msg.objectID)
+                            }
 
-                        Spacer(minLength: 10)
+                            Spacer(minLength: 10)
+                        }
+                        .padding(.top, 6)
                     }
-                    .padding(.top, 6)
+                    .background(Color(.systemGroupedBackground))
+                    .allowsHitTesting(!showReplyCards)
+
+                    VStack {
+                        Spacer()
+
+                        Button {
+                            if vm.visibleCategoryCards.isEmpty {
+                                vm.dealMockReplyCards()
+                            }
+
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showReplyCards.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "rectangle.stack.fill")
+                                Text(showReplyCards ? "Hide cards" : "Show cards")
+                            }
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(Color(.systemBackground))
+                                    .shadow(color: .black.opacity(0.08), radius: 10, y: 6)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
+                        .allowsHitTesting(!showReplyCards)
+                    }
+
+                    if showReplyCards {
+                        ZStack {
+                            Color.black.opacity(0.28)
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showReplyCards = false
+                                    }
+                                }
+
+                            VStack {
+                                ReplyCardsOverlay(
+                                    cards: vm.visibleCategoryCards,
+                                    selectedCardID: vm.selectedReplyCardID,
+                                    onTap: { card in
+                                        vm.selectReplyCard(card)
+                                    },
+                                    onSubmitCustom: { text in
+                                        print("Custom input:", text)
+                                    },
+                                    onClose: {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            showReplyCards = false
+                                        }
+                                    }
+                                )
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+
+                                Spacer()
+                            }
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                    }
                 }
-                .background(Color(.systemGroupedBackground))
+                .animation(.easeInOut(duration: 0.2), value: showReplyCards)
                 .onAppear {
                     vm.load()
+                    vm.dealMockReplyCards()
                     scrollToBottom(proxy)
                 }
                 .onChange(of: vm.messages.count) { _ in
                     scrollToBottom(proxy)
+                }
+                .onChange(of: vm.lastSubmittedUserMessageID) { _ in
+                    guard showReplyCards else { return }
+
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showReplyCards = false
+                    }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     composer

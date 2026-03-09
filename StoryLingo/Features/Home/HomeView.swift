@@ -32,13 +32,14 @@ struct HomeView: View {
                                            if let story = activeStory {
                                                ChatView(
                                                 vm: ChatViewModel(
-                                                                story: story,
-                                                                context: ctx,
-                                                                repo: CoreDataChatRepository(ctx: ctx),
-                                                                llm: llmClient,
-                                                                speechService: speechRecognizerService,
-                                                                speechSynthesizer: speechSynthesizer
-                                                            )
+                                                    story: story,
+                                                    context: ctx,
+                                                    repo: CoreDataChatRepository(ctx: ctx),
+                                                    llm: llmClient,
+                                                    speechService: speechRecognizerService,
+                                                    speechSynthesizer: speechSynthesizer,
+                                                    statsRepository: CoreDataStatsRepository(ctx: ctx)
+                                                )
                                                )
                                            }
                                        } label: { EmptyView() }
