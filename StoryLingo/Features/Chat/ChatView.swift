@@ -145,7 +145,7 @@ struct ChatView: View {
 
             HoldToRecordButton(
                 isRecording: vm.isRecording,
-                isDisabled: vm.isSending || vm.isSpeaking,
+                isDisabled: vm.isSending,
                 onPress: {
                     Task { await vm.startRecording() }
                 },

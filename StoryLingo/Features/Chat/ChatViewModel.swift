@@ -302,9 +302,10 @@ final class ChatViewModel: ObservableObject {
                 messages = try repo.fetchMessages(for: story)
                 // reshuffle cards after each AI response
                 dealMockReplyCards()
-                
+                isSending = false
                 await speakAssistantReply(replyResult.replyText, languageCode: targetCode)
             } catch {
+                isSending = false
                 print("Send error:", error)
                 errorMessage = (error as NSError).localizedDescription
             }
@@ -316,18 +317,39 @@ final class ChatViewModel: ObservableObject {
 
         do {
             isSpeaking = true
-            defer { isSpeaking = false }
 
             let stream = speechSynthesizer.synthesizeSpeechStream(
                 from: trimmed,
                 voice: voiceForLanguage(languageCode),
-                speed: nil
+                instructions: makeTTSInstructions(for: trimmed),
+                speed: 1.0
             )
 
             try await audioPlayer.playPCMStream(stream)
+            
+            isSpeaking = false
         } catch {
             print("TTS stream error:", error)
+            isSpeaking = false
         }
+    }
+    
+    private func makeTTSInstructions(for text: String) -> String {
+        let genre = story.genre ?? ""
+        let theme = story.theme ?? ""
+        let place = story.place ?? ""
+
+        return """
+        Read this as part of an interactive story.
+        Genre: \(genre)
+        Theme: \(theme)
+        Setting: \(place)
+        Match the delivery to the story context and the meaning of the text.
+        Use natural storytelling for narration.
+        Use a more conversational delivery for spoken dialogue.
+        Differentiate narration and dialogue clearly.
+        Avoid a flat reading.
+        """
     }
 
     private func voiceForLanguage(_ languageCode: String) -> String {

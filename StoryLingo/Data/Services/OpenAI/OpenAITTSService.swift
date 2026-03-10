@@ -22,6 +22,7 @@ public final class OpenAITTSService: SpeechSynthesizing, @unchecked Sendable {
         let model: String
         let input: String
         let voice: String
+        let instructions: String?
         let responseFormat: String
         let speed: Double?
 
@@ -29,6 +30,7 @@ public final class OpenAITTSService: SpeechSynthesizing, @unchecked Sendable {
             case model
             case input
             case voice
+            case instructions
             case responseFormat = "response_format"
             case speed
         }
@@ -62,6 +64,7 @@ public final class OpenAITTSService: SpeechSynthesizing, @unchecked Sendable {
     public func synthesizeSpeech(
         from text: String,
         voice: String,
+        instructions: String? = nil,
         speed: Double? = nil
     ) async throws -> Data {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -72,6 +75,7 @@ public final class OpenAITTSService: SpeechSynthesizing, @unchecked Sendable {
             model: model,
             input: trimmed,
             voice: voice,
+            instructions: instructions,
             responseFormat: "wav",
             speed: speed
         )
@@ -91,6 +95,7 @@ public final class OpenAITTSService: SpeechSynthesizing, @unchecked Sendable {
     public func synthesizeSpeechStream(
         from text: String,
         voice: String,
+        instructions: String? = nil,
         speed: Double? = nil
     ) -> AsyncThrowingStream<Data, Error> {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -108,6 +113,7 @@ public final class OpenAITTSService: SpeechSynthesizing, @unchecked Sendable {
                         model: model,
                         input: trimmed,
                         voice: voice,
+                        instructions: instructions,
                         responseFormat: "pcm",
                         speed: speed
                     )

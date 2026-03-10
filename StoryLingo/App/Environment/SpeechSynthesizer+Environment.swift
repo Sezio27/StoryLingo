@@ -12,6 +12,7 @@ private struct MissingSpeechSynthesizer: SpeechSynthesizing {
     func synthesizeSpeech(
         from text: String,
         voice: String,
+        instructions: String?,
         speed: Double?
     ) async throws -> Data {
         assertionFailure("speechSynthesizer environment value was not injected.")
@@ -21,6 +22,7 @@ private struct MissingSpeechSynthesizer: SpeechSynthesizing {
     func synthesizeSpeechStream(
         from text: String,
         voice: String,
+        instructions: String?,
         speed: Double?
     ) -> AsyncThrowingStream<Data, Error> {
         assertionFailure("speechSynthesizer environment value was not injected.")

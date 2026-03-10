@@ -32,6 +32,10 @@ struct ChatPromptBuilder {
         - Ask at most one natural follow-up question when it helps continue the story.
         - Use clear, level-appropriate language for the selected difficulty.
         - Stay in the scene and keep the story moving.
+        - Naturally mix narration and spoken dialogue when it fits the scene. 
+        - Use normal prose for narration, scene description, and actions. 
+        - Use quotation marks for spoken dialogue. 
+        - Do not label parts as "narration", "acting", or similar.
         - Do not explain grammar unless explicitly asked.
         - Do not use bullet points.
         - Do not break character.

@@ -11,12 +11,14 @@ public protocol SpeechSynthesizing: Sendable {
     func synthesizeSpeech(
         from text: String,
         voice: String,
+        instructions: String?,
         speed: Double?
     ) async throws -> Data
 
     func synthesizeSpeechStream(
         from text: String,
         voice: String,
+        instructions: String?,
         speed: Double?
     ) -> AsyncThrowingStream<Data, Error>
 }
