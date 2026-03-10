@@ -87,6 +87,9 @@ struct ChatView: View {
                                     onTap: { card in
                                         vm.selectReplyCard(card)
                                     },
+                                    onSpeak: { card in
+                                        Task { await vm.speakReplyCard(card) }
+                                    },
                                     onSubmitCustom: { text in
                                         print("Custom input:", text)
                                     },

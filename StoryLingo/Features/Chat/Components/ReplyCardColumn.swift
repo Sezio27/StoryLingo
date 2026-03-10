@@ -11,20 +11,18 @@ struct ReplyCardColumn: View {
     let cards: [ReplyCardItem]
     let selectedCardID: UUID?
     let onTap: (ReplyCardItem) -> Void
+    let onSpeak: (ReplyCardItem) -> Void
 
     var body: some View {
         VStack(spacing: 12) {
             ForEach(cards) { card in
-                Button {
-                    onTap(card)
-                } label: {
-                    ReplyCardView(
-                        card: card,
-                        isSelected: selectedCardID == card.id
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
+                ReplyCardView(
+                    card: card,
+                    isSelected: selectedCardID == card.id,
+                    onTap: { onTap(card) },
+                    onSpeak: { onSpeak(card) }
+                )
+                .frame(maxWidth: .infinity)
             }
         }
     }

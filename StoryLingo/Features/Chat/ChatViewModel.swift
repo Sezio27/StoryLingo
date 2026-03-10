@@ -42,6 +42,7 @@ final class ChatViewModel: ObservableObject {
     private var recordingTimerTask: Task<Void, Never>?
     private var shouldSendAfterRecording = true
     private let statsRepository: StatsRepository
+    private let replyCardAudioCache = TemporarySpeechFileCache()
 
 
 
@@ -377,6 +378,62 @@ final class ChatViewModel: ObservableObject {
         case "th": return "th-TH"
         default: return languageCode
         }
+    }
+    
+    func speakReplyCard(_ card: ReplyCardItem) async {
+        let spokenText = (card.sourceText ?? card.text)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !spokenText.isEmpty else { return }
+
+        let languageCode = story.language?.code ?? "en"
+        let voice = voiceForLanguage(languageCode)
+        let instructions = makeReplyCardTTSInstructions()
+
+        let cacheKey = TemporarySpeechFileCache.Key(
+            text: spokenText,
+            languageCode: languageCode,
+            voice: voice,
+            speed: 1.0,
+            instructions: instructions
+        )
+
+        do {
+            audioPlayer.stop()
+
+            if let cachedURL = replyCardAudioCache.cachedURL(for: cacheKey) {
+                try audioPlayer.playAudioFile(at: cachedURL)
+                return
+            }
+
+            let audioData = try await speechSynthesizer.synthesizeSpeech(
+                from: spokenText,
+                voice: voice,
+                instructions: instructions,
+                speed: 1.0
+            )
+
+            let fileURL = try replyCardAudioCache.store(audioData, for: cacheKey)
+            try audioPlayer.playAudioFile(at: fileURL)
+        } catch {
+            print("Reply-card TTS error:", error)
+            errorMessage = (error as NSError).localizedDescription
+        }
+    }
+
+    private func makeReplyCardTTSInstructions() -> String {
+        let genre = story.genre ?? ""
+        let theme = story.theme ?? ""
+        let place = story.place ?? ""
+
+        return """
+        Speak this short learner phrase clearly and naturally.
+        Genre: \(genre)
+        Theme: \(theme)
+        Setting: \(place)
+        Keep the pronunciation easy to imitate.
+        Do not add extra narration before or after the phrase.
+        """
     }
 
     private func translateUserMessage(

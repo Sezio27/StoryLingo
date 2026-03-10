@@ -4,6 +4,7 @@ struct ReplyCardsOverlay: View {
     let cards: [ReplyCardItem]
     let selectedCardID: UUID?
     let onTap: (ReplyCardItem) -> Void
+    let onSpeak: (ReplyCardItem) -> Void
     let onSubmitCustom: (String) -> Void
     let onClose: () -> Void
 
@@ -33,7 +34,8 @@ struct ReplyCardsOverlay: View {
             ReplyCardColumn(
                 cards: cards,
                 selectedCardID: selectedCardID,
-                onTap: onTap
+                onTap: onTap,
+                onSpeak: onSpeak
             )
 
             VStack(alignment: .leading, spacing: 8) {

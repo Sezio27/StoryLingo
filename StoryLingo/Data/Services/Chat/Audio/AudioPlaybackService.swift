@@ -1,9 +1,3 @@
-//
-//  AudioPlaybackService.swift
-//  StoryLingo
-//
-//  Created by Jakob Jacobsen on 06/03/2026.
-//
 import Foundation
 import AVFoundation
 
@@ -17,6 +11,7 @@ final class AudioPlaybackService: NSObject, AudioPlaying {
 
     private var didAttach = false
     private var isPlayingStream = false
+    private var oneShotPlayer: AVAudioPlayer?
 
     override init() {
         super.init()
@@ -45,21 +40,22 @@ final class AudioPlaybackService: NSObject, AudioPlaying {
     }
 
     func playAudio(data: Data) throws {
-        // Keep this for any non-stream fallback.
-        try activateSession()
-
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("mp3")
+            .appendingPathExtension("wav")
 
-        try data.write(to: tempURL)
+        try data.write(to: tempURL, options: .atomic)
+        try playAudioFile(at: tempURL)
+    }
 
-        let oneShotPlayer = try AVAudioPlayer(contentsOf: tempURL)
-        oneShotPlayer.prepareToPlay()
-        oneShotPlayer.play()
+    func playAudioFile(at url: URL) throws {
+        stop()
+        try activateSession()
 
-        // Hold it indirectly by replacing the streaming path if needed.
-        // If you want, you can keep a dedicated AVAudioPlayer property instead.
+        let player = try AVAudioPlayer(contentsOf: url)
+        player.prepareToPlay()
+        player.play()
+        oneShotPlayer = player
     }
 
     func playPCMStream(_ stream: AsyncThrowingStream<Data, Error>) async throws {
@@ -89,22 +85,9 @@ final class AudioPlaybackService: NSObject, AudioPlaying {
             if chunk.isEmpty { continue }
 
             guard let buffer = pcmBuffer(from: chunk, format: format) else { continue }
-
             playerNode.scheduleBuffer(buffer, completionHandler: nil)
 
-            while isPlayingStream {
-                let hasScheduledBuffers =
-                    playerNode.lastRenderTime != nil && playerNode.isPlaying
-
-                if !hasScheduledBuffers {
-                    break
-                }
-
-                try await Task.sleep(nanoseconds: 20_000_000)
-                if Task.isCancelled || !isPlayingStream { break }
-
-                break
-            }
+            try await Task.sleep(nanoseconds: 20_000_000)
         }
 
         while playerNode.isPlaying && isPlayingStream {
@@ -117,10 +100,13 @@ final class AudioPlaybackService: NSObject, AudioPlaying {
         isPlayingStream = false
         playerNode.stop()
         engine.stop()
+
+        oneShotPlayer?.stop()
+        oneShotPlayer = nil
     }
 
     private func pcmBuffer(from data: Data, format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        let bytesPerFrame = 2 * Int(channels) // Int16 mono = 2 bytes
+        let bytesPerFrame = 2 * Int(channels)
         let frameCount = data.count / bytesPerFrame
         guard frameCount > 0 else { return nil }
 
@@ -135,7 +121,6 @@ final class AudioPlaybackService: NSObject, AudioPlaying {
 
         data.withUnsafeBytes { rawBytes in
             guard let source = rawBytes.baseAddress else { return }
-
             if let dest = buffer.int16ChannelData?[0] {
                 dest.assign(from: source.assumingMemoryBound(to: Int16.self), count: frameCount)
             }

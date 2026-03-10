@@ -3,6 +3,8 @@ import SwiftUI
 struct ReplyCardView: View {
     let card: ReplyCardItem
     let isSelected: Bool
+    let onTap: () -> Void
+    let onSpeak: () -> Void
 
     private var tint: Color {
         card.category?.tint ?? .accentColor
@@ -47,6 +49,7 @@ struct ReplyCardView: View {
             }
         }
         .padding(14)
+        .padding(.trailing, 56) // leaves space for the speaker button
         .frame(maxWidth: .infinity, minHeight: 110, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -59,8 +62,24 @@ struct ReplyCardView: View {
                         )
                 }
         )
+        .overlay(alignment: .trailing) {
+            Button(action: onSpeak) {
+                Image(systemName: "speaker.wave.2.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(Color(.tertiarySystemGroupedBackground))
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 14)
+        }
         .shadow(color: .black.opacity(0.06), radius: 10, y: 6)
         .scaleEffect(isSelected ? 1.01 : 1.0)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .onTapGesture(perform: onTap)
     }
 }

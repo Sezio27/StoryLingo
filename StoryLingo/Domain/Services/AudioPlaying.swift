@@ -9,6 +9,7 @@ import Foundation
 
 public protocol AudioPlaying: AnyObject {
     func playAudio(data: Data) throws
+    func playAudioFile(at url: URL) throws
     func playPCMStream(_ stream: AsyncThrowingStream<Data, Error>) async throws
     func stop()
 }
