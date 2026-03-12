@@ -5,17 +5,16 @@ struct ReplyCardsOverlay: View {
     let selectedCardID: UUID?
     let onTap: (ReplyCardItem) -> Void
     let onSpeak: (ReplyCardItem) -> Void
-    let onSubmitCustom: (String) -> Void
+    let onSubmitCustom: (String) async -> String?
     let onClose: () -> Void
 
     @State private var customText: String = ""
+    @State private var customTranslation: String?
+    @State private var isCustomEditorVisible = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Reply Cards")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-
                 Spacer()
 
                 Button(action: onClose) {
@@ -39,34 +38,52 @@ struct ReplyCardsOverlay: View {
             )
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Write your own")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 10) {
-                    TextField("Type what you want to say", text: $customText)
-                        .textFieldStyle(.plain)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color(.secondarySystemGroupedBackground))
-                        )
-
-                    Button {
-                        let trimmed = customText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmed.isEmpty else { return }
-                        onSubmitCustom(trimmed)
-                    } label: {
-                        Text("Submit")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
+                if isCustomEditorVisible {
+                    HStack(spacing: 10) {
+                        TextField("Type what you want to say", text: $customText)
+                            .textFieldStyle(.plain)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 12)
                             .background(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color.accentColor)
+                                    .fill(Color(.secondarySystemGroupedBackground))
                             )
+
+                        Button {
+                            let trimmed = customText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !trimmed.isEmpty else { return }
+
+                            Task {
+                                customTranslation = await onSubmitCustom(trimmed)
+                            }
+                        } label: {
+                            Text("Submit")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(Color.accentColor)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if let customTranslation {
+                        Text(customTranslation)
+                            .font(.system(size: 14, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .truncationMode(.tail)
+                    }
+                } else {
+                    Button {
+                        isCustomEditorVisible = true
+                    } label: {
+                        Text("Write your own")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
                 }

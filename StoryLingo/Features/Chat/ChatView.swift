@@ -44,7 +44,7 @@ struct ChatView: View {
 
                         Button {
                             if vm.visibleCategoryCards.isEmpty {
-                                vm.dealMockReplyCards()
+                                Task { await vm.refreshReplyCards() }
                             }
 
                             withAnimation(.easeInOut(duration: 0.2)) {
@@ -91,7 +91,7 @@ struct ChatView: View {
                                         Task { await vm.speakReplyCard(card) }
                                     },
                                     onSubmitCustom: { text in
-                                        print("Custom input:", text)
+                                        await vm.submitCustomReply(text)
                                     },
                                     onClose: {
                                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -111,18 +111,10 @@ struct ChatView: View {
                 .animation(.easeInOut(duration: 0.2), value: showReplyCards)
                 .onAppear {
                     vm.load()
-                    vm.dealMockReplyCards()
                     scrollToBottom(proxy)
                 }
                 .onChange(of: vm.messages.count) { _ in
                     scrollToBottom(proxy)
-                }
-                .onChange(of: vm.lastSubmittedUserMessageID) { _ in
-                    guard showReplyCards else { return }
-
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showReplyCards = false
-                    }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     composer

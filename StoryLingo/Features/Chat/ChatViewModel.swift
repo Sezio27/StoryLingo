@@ -38,6 +38,7 @@ final class ChatViewModel: ObservableObject {
     private let settingsRepository: AppSettingsRepositoryProtocol
     private let translator: TranslatorClient
     private let replyGenerator: ChatReplyGenerating
+    private let replyCardGenerator: ReplyCardGenerating
     private var hasSubmittedCurrentRecording = false
     private var recordingTimerTask: Task<Void, Never>?
     private var shouldSendAfterRecording = true
@@ -55,6 +56,7 @@ final class ChatViewModel: ObservableObject {
         settingsRepository: AppSettingsRepositoryProtocol = AppSettingsRepository(),
         translator: TranslatorClient? = nil,
         replyGenerator: ChatReplyGenerating? = nil,
+        replyCardGenerator: ReplyCardGenerating? = nil,
         speechService: SpeechRecognizerServiceProtocol,
         speechSynthesizer: any SpeechSynthesizing,
         audioPlayer: AudioPlaying? = nil,
@@ -67,6 +69,7 @@ final class ChatViewModel: ObservableObject {
         self.settingsRepository = settingsRepository
         self.translator = translator ?? LLMTranslatorClient(llm: llm)
         self.replyGenerator = replyGenerator ?? LLMChatReplyGenerator(llm: llm)
+        self.replyCardGenerator = replyCardGenerator ?? LLMReplyCardGenerator(llm: llm)
         self.speechService = speechService
         self.speechSynthesizer = speechSynthesizer
         self.audioPlayer = audioPlayer ?? AudioPlaybackService()
@@ -77,15 +80,67 @@ final class ChatViewModel: ObservableObject {
         replyCards.filter { $0.kind == .category }
     }
     
-    func dealMockReplyCards() {
-        replyCards = MockReplyCardFactory.makeHand()
-        selectedReplyCardID = nil
+    func refreshReplyCards() async {
+        do {
+            let settings = try settingsRepository.fetchOrCreate(in: context)
+
+            guard
+                let nativeLanguage = settings.nativeLanguage,
+                let targetLanguage = story.language,
+                let nativeCode = nativeLanguage.code,
+                let nativeName = nativeLanguage.displayName,
+                let targetCode = targetLanguage.code,
+                let targetName = targetLanguage.displayName
+            else {
+                throw NSError(
+                    domain: "ChatViewModel",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Missing native or target language."]
+                )
+            }
+
+            let difficulty = DifficultyLevel(rawValue: settings.level) ?? .intermediate
+            let categories = Array(CardCategory.allCases.shuffled().prefix(3))
+            let history = messages.suffix(4).map {
+                LLMMessage(role: $0.isUser ? .user : .assistant, content: $0.text ?? "")
+            }
+
+            let generated = try await replyCardGenerator.generateReplyCards(
+                categories: categories,
+                recentHistory: history,
+                context: ReplyCardPromptContext(
+                    nativeLanguageCode: nativeCode,
+                    nativeLanguageName: nativeName,
+                    targetLanguageCode: targetCode,
+                    targetLanguageName: targetName,
+                    difficulty: difficulty
+                )
+            )
+
+            replyCards = generated
+            selectedReplyCardID = nil
+        } catch {
+            print("Reply card generation error:", error)
+            replyCards = MockReplyCardFactory.makeHand()
+            selectedReplyCardID = nil
+        }
     }
 
     func selectReplyCard(_ card: ReplyCardItem) {
         selectedReplyCardID = card.id
     }
 
+
+
+    func submitCustomReply(_ text: String) async -> String? {
+        await sendMessage(text)
+
+        guard let messageID = lastSubmittedUserMessageID else {
+            return nil
+        }
+
+        return translatedBubbles[messageID]?.text
+    }
 
     func load() {
         do {
@@ -107,7 +162,7 @@ final class ChatViewModel: ObservableObject {
                     return (message.objectID, bubble)
                 }
             )
-            dealMockReplyCards()
+            Task { await refreshReplyCards() }
         } catch {
             assertionFailure("Failed to fetch messages: \(error)")
         }
@@ -301,8 +356,8 @@ final class ChatViewModel: ObservableObject {
 
                 try persistTranslation(assistantTranslation, for: savedAssistantMessage)
                 messages = try repo.fetchMessages(for: story)
-                // reshuffle cards after each AI response
-                dealMockReplyCards()
+                // regenerate cards after each AI response
+                await refreshReplyCards()
                 isSending = false
                 await speakAssistantReply(replyResult.replyText, languageCode: targetCode)
             } catch {
