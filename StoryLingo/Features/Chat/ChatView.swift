@@ -44,7 +44,7 @@ struct ChatView: View {
 
                         Button {
                             if vm.visibleCategoryCards.isEmpty {
-                                vm.dealMockReplyCards()
+                                Task { await vm.refreshReplyCards() }
                             }
 
                             withAnimation(.easeInOut(duration: 0.2)) {
@@ -111,7 +111,6 @@ struct ChatView: View {
                 .animation(.easeInOut(duration: 0.2), value: showReplyCards)
                 .onAppear {
                     vm.load()
-                    vm.dealMockReplyCards()
                     scrollToBottom(proxy)
                 }
                 .onChange(of: vm.messages.count) { _ in
