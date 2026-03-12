@@ -91,7 +91,7 @@ struct ChatView: View {
                                         Task { await vm.speakReplyCard(card) }
                                     },
                                     onSubmitCustom: { text in
-                                        print("Custom input:", text)
+                                        await vm.submitCustomReply(text)
                                     },
                                     onClose: {
                                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -115,13 +115,6 @@ struct ChatView: View {
                 }
                 .onChange(of: vm.messages.count) { _ in
                     scrollToBottom(proxy)
-                }
-                .onChange(of: vm.lastSubmittedUserMessageID) { _ in
-                    guard showReplyCards else { return }
-
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showReplyCards = false
-                    }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     composer

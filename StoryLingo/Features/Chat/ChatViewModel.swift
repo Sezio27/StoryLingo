@@ -131,6 +131,17 @@ final class ChatViewModel: ObservableObject {
     }
 
 
+
+    func submitCustomReply(_ text: String) async -> String? {
+        await sendMessage(text)
+
+        guard let messageID = lastSubmittedUserMessageID else {
+            return nil
+        }
+
+        return translatedBubbles[messageID]?.text
+    }
+
     func load() {
         do {
             messages = try repo.fetchMessages(for: story)
