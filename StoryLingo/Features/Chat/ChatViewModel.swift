@@ -132,14 +132,14 @@ final class ChatViewModel: ObservableObject {
 
 
 
-    func submitCustomReply(_ text: String) async -> String? {
+    func submitCustomReply(_ text: String) async -> BubbleTranslation? {
         await sendMessage(text)
 
         guard let messageID = lastSubmittedUserMessageID else {
             return nil
         }
 
-        return translatedBubbles[messageID]?.text
+        return translatedBubbles[messageID]
     }
 
     func load() {
@@ -435,6 +435,44 @@ final class ChatViewModel: ObservableObject {
         }
     }
     
+
+    func speakCustomTranslation(_ translation: BubbleTranslation) async {
+        let spokenText = translation.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !spokenText.isEmpty else { return }
+
+        let languageCode = translation.targetLanguageCode
+        let voice = voiceForLanguage(languageCode)
+
+        let cacheKey = TemporarySpeechFileCache.Key(
+            text: spokenText,
+            languageCode: languageCode,
+            voice: voice,
+            speed: 1.0,
+            instructions: "Speak this learner translation clearly and naturally."
+        )
+
+        do {
+            audioPlayer.stop()
+
+            if let cachedURL = replyCardAudioCache.cachedURL(for: cacheKey) {
+                try audioPlayer.playAudioFile(at: cachedURL)
+                return
+            }
+
+            let audioData = try await speechSynthesizer.synthesizeSpeech(
+                from: spokenText,
+                voice: voice,
+                instructions: "Speak this learner translation clearly and naturally.",
+                speed: 1.0
+            )
+
+            let fileURL = try replyCardAudioCache.store(audioData, for: cacheKey)
+            try audioPlayer.playAudioFile(at: fileURL)
+        } catch {
+            print("Custom translation TTS error:", error)
+            errorMessage = (error as NSError).localizedDescription
+        }
+    }
     func speakReplyCard(_ card: ReplyCardItem) async {
         let spokenText = (card.sourceText ?? card.text)
             .trimmingCharacters(in: .whitespacesAndNewlines)

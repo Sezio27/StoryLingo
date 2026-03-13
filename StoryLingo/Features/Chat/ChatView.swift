@@ -93,6 +93,9 @@ struct ChatView: View {
                                     onSubmitCustom: { text in
                                         await vm.submitCustomReply(text)
                                     },
+                                    onSpeakCustomTranslation: { translation in
+                                        await vm.speakCustomTranslation(translation)
+                                    },
                                     onClose: {
                                         withAnimation(.easeInOut(duration: 0.2)) {
                                             showReplyCards = false
