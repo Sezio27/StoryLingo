@@ -5,12 +5,15 @@ struct ReplyCardsOverlay: View {
     let selectedCardID: UUID?
     let onTap: (ReplyCardItem) -> Void
     let onSpeak: (ReplyCardItem) -> Void
-    let onSubmitCustom: (String) async -> String?
+    let onSubmitCustom: (String) async -> BubbleTranslation?
+    let onSpeakCustomTranslation: (BubbleTranslation) async -> Void
     let onClose: () -> Void
 
     @State private var customText: String = ""
-    @State private var translatedText: String = ""
+    @State private var customTranslation: BubbleTranslation?
     @State private var isCustomEditorVisible = false
+    @State private var isSubmittingCustom = false
+    @State private var isPlayingCustomTranslation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -59,7 +62,7 @@ struct ReplyCardsOverlay: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isCustomEditorVisible = true
-                        translatedText = ""
+                        customTranslation = nil
                     }
                 } label: {
                     Text("Write your own")
@@ -90,7 +93,7 @@ struct ReplyCardsOverlay: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color(.secondarySystemGroupedBackground))
 
-                if translatedText.isEmpty {
+                if (customTranslation?.text ?? "").isEmpty {
                     Text("Translation will appear here")
                         .font(.system(size: 15, weight: .regular, design: .rounded))
                         .foregroundStyle(.secondary)
@@ -98,7 +101,7 @@ struct ReplyCardsOverlay: View {
                         .padding(.vertical, 14)
                 }
 
-                TextEditor(text: .constant(translatedText))
+                TextEditor(text: .constant(customTranslation?.text ?? ""))
                     .scrollContentBackground(.hidden)
                     .background(Color.clear)
                     .font(.system(size: 15, weight: .regular, design: .rounded))
@@ -108,6 +111,25 @@ struct ReplyCardsOverlay: View {
                     .padding(.vertical, 8)
             }
             .frame(minHeight: 110)
+
+            if let customTranslation {
+                Button {
+                    Task {
+                        isPlayingCustomTranslation = true
+                        await onSpeakCustomTranslation(customTranslation)
+                        isPlayingCustomTranslation = false
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: isPlayingCustomTranslation ? "speaker.wave.3.fill" : "play.fill")
+                        Text(isPlayingCustomTranslation ? "Playing…" : "Play translation")
+                    }
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                     .foregroundStyle(.accentColor)
+                }
+                .buttonStyle(.plain)
+                .disabled(isPlayingCustomTranslation)
+            }
 
             Text("Your text")
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -140,7 +162,7 @@ struct ReplyCardsOverlay: View {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isCustomEditorVisible = false
                         customText = ""
-                        translatedText = ""
+                        customTranslation = nil
                     }
                 } label: {
                     Text("Cancel")
@@ -159,10 +181,13 @@ struct ReplyCardsOverlay: View {
                     let trimmed = customText.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty else { return }
 
-                    // Placeholder for later translation functionality
-                    translatedText = "Translated text will be shown here later."
+                    Task {
+                        isSubmittingCustom = true
+                        customTranslation = await onSubmitCustom(trimmed)
+                        isSubmittingCustom = false
+                    }
                 } label: {
-                    Text("Submit")
+                    Text(isSubmittingCustom ? "Translating…" : "Submit")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -173,6 +198,7 @@ struct ReplyCardsOverlay: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .disabled(isSubmittingCustom)
             }
 
             Spacer(minLength: 0)
